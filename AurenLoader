@@ -1,0 +1,865 @@
+--[[
+════════════════════════════════════════════════════════════════════
+  Auren Hub Addon  •  v1.1
+  Usage:
+    local Auren = loadstring(game:HttpGet(".../Auren%20v4.1"))()
+    local Hub   = loadstring(game:HttpGet(".../AurenHub"))()(Auren)
+════════════════════════════════════════════════════════════════════
+]]
+
+return function(Auren)
+	if not Auren or type(Auren) ~= "table" or not Auren.CreateWindow then
+		warn("[AurenHub] Invalid Auren library received.")
+		return nil
+	end
+
+	local HttpService      = game:GetService("HttpService")
+	local UserInputService = game:GetService("UserInputService")
+	local TweenService     = game:GetService("TweenService")
+
+	local httpRequest  = (syn and syn.request) or http_request or request
+		or (http and http.request) or (fluxus and fluxus.request)
+	local setClipboard = setclipboard or toclipboard or set_clipboard
+		or (syn and syn.write_clipboard)
+
+	local Theme = Auren.Theme
+
+	local function new(class, props)
+		local inst = Instance.new(class)
+		local parent
+		for k, v in pairs(props or {}) do
+			if k == "Parent" then parent = v else inst[k] = v end
+		end
+		if parent then inst.Parent = parent end
+		return inst
+	end
+	local function round(inst, radius)
+		local c = Instance.new("UICorner")
+		c.CornerRadius = typeof(radius) == "UDim" and radius or UDim.new(0, radius)
+		c.Parent = inst
+		return c
+	end
+	local function stroke(inst, color, thickness, transparency)
+		local s = Instance.new("UIStroke")
+		s.Color = color or Color3.new(1, 1, 1)
+		s.Thickness = thickness or 1
+		s.Transparency = transparency or 0.85
+		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		s.Parent = inst
+		return s
+	end
+	local function padding(inst, t, r, b, l)
+		local p = Instance.new("UIPadding")
+		p.PaddingTop, p.PaddingRight = UDim.new(0, t or 0), UDim.new(0, r or 0)
+		p.PaddingBottom, p.PaddingLeft = UDim.new(0, b or 0), UDim.new(0, l or 0)
+		p.Parent = inst
+		return p
+	end
+	local function tween(inst, time, props, style, dir)
+		local t = TweenService:Create(
+			inst,
+			TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out),
+			props
+		)
+		t:Play()
+		return t
+	end
+	local function iconBase(parent, size)
+		return new("Frame", {
+			Parent = parent, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1,
+		})
+	end
+	local function checkIcon(parent, color, size)
+		size = size or 10
+		local c = iconBase(parent, size)
+		local s = size / 10
+		for _, cfg in ipairs({
+			{ pos = UDim2.fromScale(0.38, 0.55), sz = UDim2.fromOffset(math.floor(6*s), math.max(2, math.floor(2*s))), rot = 45 },
+			{ pos = UDim2.fromScale(0.62, 0.45), sz = UDim2.fromOffset(math.floor(10*s), math.max(2, math.floor(2*s))), rot = -45 },
+		}) do
+			local bar = new("Frame", {
+				Parent = c, AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = cfg.pos, Size = cfg.sz, BackgroundColor3 = color,
+				BorderSizePixel = 0, Rotation = cfg.rot,
+			})
+			round(bar, 1)
+		end
+		return c
+	end
+	local function keyIcon(parent, color, size)
+		size = size or 10
+		local c = iconBase(parent, size)
+		local s = size / 10
+		local ring = new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(0, math.floor(2*s)),
+			Size = UDim2.fromOffset(math.floor(5*s), math.floor(5*s)),
+			BackgroundTransparency = 1,
+		})
+		round(ring, UDim.new(1, 0)); stroke(ring, color, 1.2, 0.15)
+		new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(math.floor(4*s), math.floor(4*s)),
+			Size = UDim2.fromOffset(math.floor(6*s), math.max(1.5, math.floor(1.5*s))),
+			BackgroundColor3 = color, BorderSizePixel = 0,
+		})
+		new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(math.floor(8*s), math.floor(5*s)),
+			Size = UDim2.fromOffset(math.max(1.5, math.floor(1.5*s)), math.floor(3*s)),
+			BackgroundColor3 = color, BorderSizePixel = 0,
+		})
+		return c
+	end
+	local function globeIcon(parent, color, size)
+		size = size or 10
+		local c = iconBase(parent, size)
+		local s = size / 10
+		local circle = new("Frame", { Parent = c, Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1 })
+		round(circle, UDim.new(1, 0)); stroke(circle, color, 1.2, 0.15)
+		new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(0, math.floor(4*s)),
+			Size = UDim2.fromOffset(size, math.max(1, math.floor(1*s))),
+			BackgroundColor3 = color, BackgroundTransparency = 0.4, BorderSizePixel = 0,
+		})
+		new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(math.floor(4*s), 0),
+			Size = UDim2.fromOffset(math.max(1, math.floor(1*s)), size),
+			BackgroundColor3 = color, BackgroundTransparency = 0.4, BorderSizePixel = 0,
+		})
+		return c
+	end
+	local function copyIcon(parent, color, size)
+		size = size or 12
+		local c = iconBase(parent, size)
+		local s = size / 12
+		local b1 = new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(math.floor(3*s), 0),
+			Size = UDim2.fromOffset(math.floor(9*s), math.floor(9*s)),
+			BackgroundTransparency = 1,
+		})
+		round(b1, 2); stroke(b1, color, 1.2, 0.15)
+		local b2 = new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(0, math.floor(3*s)),
+			Size = UDim2.fromOffset(math.floor(9*s), math.floor(9*s)),
+			BackgroundColor3 = Color3.fromRGB(0,0,0), BackgroundTransparency = 0.35, BorderSizePixel = 0,
+		})
+		round(b2, 2); stroke(b2, color, 1.2, 0.15)
+		return c
+	end
+	local function saveIcon(parent, color, size)
+		size = size or 12
+		local c = iconBase(parent, size)
+		local s = size / 12
+		local floppy = new("Frame", { Parent = c, Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1 })
+		round(floppy, 2); stroke(floppy, color, 1.3, 0.1)
+		new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(math.floor(3*s), 0),
+			Size = UDim2.fromOffset(math.floor(6*s), math.floor(4*s)),
+			BackgroundColor3 = color, BackgroundTransparency = 0.4, BorderSizePixel = 0,
+		})
+		new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(math.floor(2*s), math.floor(7*s)),
+			Size = UDim2.fromOffset(math.floor(8*s), math.floor(5*s)),
+			BackgroundColor3 = color, BackgroundTransparency = 0.6, BorderSizePixel = 0,
+		})
+		return c
+	end
+	local function searchIcon(parent, color, size)
+		size = size or 14
+		local c = iconBase(parent, size)
+		local s = size / 14
+		local circle = new("Frame", {
+			Parent = c, Size = UDim2.fromOffset(math.floor(10*s), math.floor(10*s)),
+			BackgroundTransparency = 1,
+		})
+		round(circle, UDim.new(1, 0)); stroke(circle, color, 1.5, 0.15)
+		new("Frame", {
+			Parent = c, Position = UDim2.fromOffset(math.floor(8*s), math.floor(8*s)),
+			Size = UDim2.fromOffset(math.floor(6*s), math.max(1.5, math.floor(1.5*s))),
+			BackgroundColor3 = color, BorderSizePixel = 0, Rotation = 45,
+		})
+		return c
+	end
+
+	local Window = Auren:CreateWindow({
+		Title      = "Auren",
+		Subtitle   = "v4.1 • hub",
+		Size       = Vector2.new(620, 440),
+		ConfigName = "auren_hub",
+	})
+
+	local SavedScripts = {}
+	local function isScriptSaved(id)
+		for _, s in ipairs(SavedScripts) do
+			if s._id == id then return true end
+		end
+		return false
+	end
+
+	local function fetchScripts(query, filters)
+		local url = "https://scriptblox.com/api/script/search?q="
+			.. HttpService:UrlEncode(query or "") .. "&max=20"
+		if filters then
+			if filters.key ~= nil then url = url .. "&key=" .. tostring(filters.key) end
+			if filters.universal ~= nil then url = url .. "&universal=" .. tostring(filters.universal) end
+			if filters.verified ~= nil then url = url .. "&verified=" .. tostring(filters.verified) end
+		end
+		local body
+		if httpRequest then
+			local ok, res = pcall(function() return httpRequest({ Url = url, Method = "GET" }) end)
+			if ok and res and res.Body then body = res.Body end
+		end
+		if not body then
+			local ok, res = pcall(function() return game:HttpGet(url) end)
+			if ok then body = res end
+		end
+		if not body then return {} end
+		local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+		if not ok or not data or not data.result then return {} end
+		return data.result.scripts or {}
+	end
+	local function fetchDetails(slug)
+		local url = "https://scriptblox.com/api/script/" .. slug
+		local body
+		if httpRequest then
+			local ok, res = pcall(function() return httpRequest({ Url = url, Method = "GET" }) end)
+			if ok and res and res.Body then body = res.Body end
+		end
+		if not body then
+			local ok, res = pcall(function() return game:HttpGet(url) end)
+			if ok then body = res end
+		end
+		if not body then return nil end
+		local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+		if not ok or not data or not data.script then return nil end
+		return data.script
+	end
+	local function copyText(text)
+		if not setClipboard then return false end
+		return pcall(setClipboard, text)
+	end
+
+	local function makeBadge(parent, label, color, iconType, order)
+		local badge = new("Frame", {
+			Parent = parent, Size = UDim2.fromOffset(0, 18),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = color, BackgroundTransparency = 0.25,
+			BorderSizePixel = 0, LayoutOrder = order, ZIndex = 12,
+		})
+		round(badge, 5)
+		padding(badge, 0, 8, 0, 6)
+		local inner = new("Frame", {
+			Parent = badge, Size = UDim2.fromOffset(0, 18),
+			AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1,
+		})
+		new("UIListLayout", {
+			Parent = inner, FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		local holder = new("Frame", {
+			Parent = inner, Size = UDim2.fromOffset(10, 10),
+			BackgroundTransparency = 1, LayoutOrder = 1,
+		})
+		if iconType == "key" then keyIcon(holder, color, 10)
+		elseif iconType == "check" then checkIcon(holder, color, 10)
+		elseif iconType == "globe" then globeIcon(holder, color, 10) end
+		new("TextLabel", {
+			Parent = inner, Size = UDim2.fromOffset(0, 18),
+			AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1,
+			Text = label, Font = Theme.FontBold, TextSize = 9,
+			TextColor3 = color, LayoutOrder = 2, ZIndex = 13,
+		})
+		return badge
+	end
+
+	local HubTab = Window:AddTab("Hub", "•")
+	local hubScroll = HubTab.Scroll
+
+	local hubMain = new("Frame", {
+		Parent = hubScroll, Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+		LayoutOrder = 1, ZIndex = 6,
+	})
+	new("UIListLayout", {
+		Parent = hubMain, Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+
+	local searchBar = new("Frame", {
+		Parent = hubMain, Size = UDim2.new(1, 0, 0, 36),
+		BackgroundColor3 = Theme.SurfaceAlt, BackgroundTransparency = 0.3,
+		BorderSizePixel = 0, LayoutOrder = 1, ZIndex = 8,
+	})
+	round(searchBar, 10)
+	local siHolder = new("Frame", {
+		Parent = searchBar, Position = UDim2.fromOffset(10, 11),
+		Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1, ZIndex = 10,
+	})
+	searchIcon(siHolder, Theme.SubText, 14)
+	local searchInput = new("TextBox", {
+		Parent = searchBar, Position = UDim2.fromOffset(32, 0),
+		Size = UDim2.new(1, -42, 1, 0), BackgroundTransparency = 1, Text = "",
+		PlaceholderText = "Search scripts on ScriptBlox…",
+		PlaceholderColor3 = Theme.SubText, Font = Theme.Font, TextSize = 12,
+		TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false, ZIndex = 10,
+	})
+
+	local filterRow = new("Frame", {
+		Parent = hubMain, Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+		LayoutOrder = 2, ZIndex = 8,
+	})
+	new("UIListLayout", {
+		Parent = filterRow, FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+
+	local filters = { key = nil, universal = nil, verified = nil }
+	local filterButtons = {}
+	local function makeFilterButton(label, key, value)
+		local fbtn = new("TextButton", {
+			Parent = filterRow, Size = UDim2.fromOffset(0, 26),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = Theme.SurfaceAlt, BackgroundTransparency = 0.3,
+			BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 9,
+		})
+		round(fbtn, 7)
+		padding(fbtn, 0, 10, 0, 10)
+		new("TextLabel", {
+			Parent = fbtn, Size = UDim2.fromOffset(0, 26),
+			AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1,
+			Text = label, Font = Theme.FontMedium, TextSize = 10,
+			TextColor3 = Theme.SubText, ZIndex = 10,
+		})
+		table.insert(filterButtons, { btn = fbtn, key = key, value = value })
+		fbtn.MouseButton1Click:Connect(function()
+			if filters[key] == value then
+				filters[key] = nil
+				tween(fbtn, 0.2, { BackgroundColor3 = Theme.SurfaceAlt, BackgroundTransparency = 0.3 })
+			else
+				filters[key] = value
+				tween(fbtn, 0.2, { BackgroundColor3 = Window.Accent, BackgroundTransparency = 0.15 })
+			end
+		end)
+	end
+	makeFilterButton("Keyless", "key", 0)
+	makeFilterButton("Key", "key", 1)
+	makeFilterButton("Verified", "verified", 1)
+	makeFilterButton("Universal", "universal", 1)
+
+	local scriptList = new("Frame", {
+		Parent = hubMain, Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+		LayoutOrder = 3, ZIndex = 8,
+	})
+	new("UIListLayout", {
+		Parent = scriptList, Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+
+	local statusLbl = new("TextLabel", {
+		Parent = hubMain, Size = UDim2.new(1, 0, 0, 40),
+		BackgroundTransparency = 1,
+		Text = "Search for scripts or tap a filter to begin.",
+		Font = Theme.Font, TextSize = 12, TextColor3 = Theme.SubText,
+		LayoutOrder = 4, ZIndex = 8,
+	})
+
+	local contentFrame = HubTab.Page
+	local descPanel = new("Frame", {
+		Parent = contentFrame, Position = UDim2.new(1, 10, 0, 0),
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Background, BackgroundTransparency = 0.02,
+		BorderSizePixel = 0, ZIndex = 100, Visible = false,
+	})
+	round(descPanel, 12)
+	stroke(descPanel, Theme.Border, 1, 0.6)
+	padding(descPanel, 12, 14, 12, 14)
+	local descHead = new("Frame", {
+		Parent = descPanel, Size = UDim2.new(1, 0, 0, 36),
+		BackgroundTransparency = 1, ZIndex = 101,
+	})
+	local descBack = new("TextButton", {
+		Parent = descHead, Size = UDim2.fromOffset(30, 30),
+		BackgroundColor3 = Theme.SurfaceAlt, BackgroundTransparency = 0.3,
+		BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 102,
+	})
+	round(descBack, 8)
+	for _, y in ipairs({ -3, 3 }) do
+		local ch = new("Frame", {
+			Parent = descBack, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.55, 0, 0.5, y), Size = UDim2.fromOffset(7, 2),
+			BackgroundColor3 = Theme.Text, BorderSizePixel = 0,
+			Rotation = y < 0 and -45 or 45,
+		})
+		round(ch, 1)
+	end
+	local descTitle = new("TextLabel", {
+		Parent = descHead, Position = UDim2.fromOffset(42, 0),
+		Size = UDim2.new(1, -42, 1, 0), BackgroundTransparency = 1,
+		Text = "Script Details", Font = Theme.FontBold, TextSize = 15,
+		TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 102,
+	})
+	local descScroll = new("ScrollingFrame", {
+		Parent = descPanel, Position = UDim2.fromOffset(0, 44),
+		Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, BorderSizePixel = 0,
+		CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 4, ScrollBarImageColor3 = Theme.SubText,
+		ScrollBarImageTransparency = 0.5, ZIndex = 101,
+	})
+	new("UIListLayout", {
+		Parent = descScroll, Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+
+	local function openDescription(details)
+		for _, ch in ipairs(descScroll:GetChildren()) do
+			if ch:IsA("Frame") or ch:IsA("TextLabel") then ch:Destroy() end
+		end
+		descTitle.Text = details.title or "Script Details"
+		local authorRow = new("Frame", {
+			Parent = descScroll, Size = UDim2.new(1, 0, 0, 40),
+			BackgroundTransparency = 1, LayoutOrder = 1, ZIndex = 102,
+		})
+		new("UIListLayout", {
+			Parent = authorRow, FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		local avatar = new("Frame", {
+			Parent = authorRow, Size = UDim2.fromOffset(30, 30),
+			BackgroundColor3 = Window.Accent, BorderSizePixel = 0,
+			LayoutOrder = 1, ZIndex = 103,
+		})
+		round(avatar, UDim.new(1, 0))
+		new("TextLabel", {
+			Parent = avatar, Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = string.upper(string.sub(details.owner and details.owner.username or "?", 1, 1)),
+			Font = Theme.FontBold, TextSize = 13,
+			TextColor3 = Color3.new(1, 1, 1), ZIndex = 104,
+		})
+		new("TextLabel", {
+			Parent = authorRow, Size = UDim2.fromOffset(0, 30),
+			AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1,
+			Text = details.owner and details.owner.username or "Unknown",
+			Font = Theme.FontBold, TextSize = 13, TextColor3 = Theme.Text,
+			TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 2, ZIndex = 103,
+		})
+		if details.owner and details.owner.verified then
+			local vh = new("Frame", {
+				Parent = authorRow, Size = UDim2.fromOffset(14, 14),
+				BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 103,
+			})
+			checkIcon(vh, Theme.Blue, 14)
+		end
+		local badgeRow = new("Frame", {
+			Parent = descScroll, Size = UDim2.new(1, 0, 0, 20),
+			BackgroundTransparency = 1, LayoutOrder = 2, ZIndex = 102,
+		})
+		new("UIListLayout", {
+			Parent = badgeRow, FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder,
+		})
+		local o = 1
+		if details.key == false then
+			makeBadge(badgeRow, "Keyless", Theme.Green, "key", o); o = o + 1
+		elseif details.key == true then
+			makeBadge(badgeRow, "Key", Theme.Yellow, "key", o); o = o + 1
+		end
+		if details.verified == true then
+			makeBadge(badgeRow, "Verified", Theme.Blue, "check", o); o = o + 1
+		end
+		if details.isUniversal == true then
+			makeBadge(badgeRow, "Universal", Theme.Purple, "globe", o)
+		end
+		new("TextLabel", {
+			Parent = descScroll, Size = UDim2.new(1, 0, 0, 16),
+			BackgroundTransparency = 1,
+			Text = "Views: " .. tostring(details.views or 0)
+				.. "   Likes: " .. tostring(details.likeCount or 0),
+			Font = Theme.Font, TextSize = 10, TextColor3 = Theme.SubText,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			LayoutOrder = 3, ZIndex = 102,
+		})
+		new("TextLabel", {
+			Parent = descScroll, Size = UDim2.new(1, 0, 0, 14),
+			BackgroundTransparency = 1, Text = "DESCRIPTION",
+			Font = Theme.FontBold, TextSize = 10, TextColor3 = Theme.SubText,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			LayoutOrder = 4, ZIndex = 102,
+		})
+		local body = details.features or details.description or "No description provided."
+		local bodyHolder = new("Frame", {
+			Parent = descScroll, Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = Theme.Surface, BackgroundTransparency = 0.3,
+			BorderSizePixel = 0, LayoutOrder = 5, ZIndex = 102,
+		})
+		round(bodyHolder, 10)
+		stroke(bodyHolder, Theme.Border, 1, 0.6)
+		padding(bodyHolder, 10, 10, 10, 10)
+		new("TextLabel", {
+			Parent = bodyHolder, Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+			Text = body, Font = Theme.Font, TextSize = 11,
+			TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 103,
+		})
+		local actions = new("Frame", {
+			Parent = descScroll, Size = UDim2.new(1, 0, 0, 40),
+			BackgroundTransparency = 1, LayoutOrder = 6, ZIndex = 102,
+		})
+		new("UIListLayout", {
+			Parent = actions, FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder,
+		})
+		local copyBtn = new("TextButton", {
+			Parent = actions, Size = UDim2.new(0.5, -4, 1, 0),
+			BackgroundColor3 = Theme.Blue, BackgroundTransparency = 0.15,
+			BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 103,
+		})
+		round(copyBtn, 9)
+		local cholder = new("Frame", {
+			Parent = copyBtn, Position = UDim2.fromOffset(10, 14),
+			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, ZIndex = 104,
+		})
+		copyIcon(cholder, Color3.new(1, 1, 1), 12)
+		new("TextLabel", {
+			Parent = copyBtn, Position = UDim2.fromOffset(28, 0),
+			Size = UDim2.new(1, -36, 1, 0), BackgroundTransparency = 1,
+			Text = "Copy Script", Font = Theme.FontBold, TextSize = 11,
+			TextColor3 = Color3.new(1, 1, 1), ZIndex = 104,
+		})
+		copyBtn.MouseButton1Click:Connect(function()
+			if copyText(details.script or "") then
+				Window:Notify("Copied", "Script copied to clipboard.", 3, "success")
+			else
+				Window:Notify("Copy Failed", "Executor doesn't support clipboard.", 3, "error")
+			end
+		end)
+		local saveBtn = new("TextButton", {
+			Parent = actions, Size = UDim2.new(0.5, -4, 1, 0),
+			BackgroundColor3 = isScriptSaved(details._id) and Theme.SurfaceAlt or Theme.Green,
+			BackgroundTransparency = 0.15,
+			BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 103,
+		})
+		round(saveBtn, 9)
+		local sholder = new("Frame", {
+			Parent = saveBtn, Position = UDim2.fromOffset(10, 14),
+			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, ZIndex = 104,
+		})
+		saveIcon(sholder, Color3.new(1, 1, 1), 12)
+		local saveLbl = new("TextLabel", {
+			Parent = saveBtn, Position = UDim2.fromOffset(28, 0),
+			Size = UDim2.new(1, -36, 1, 0), BackgroundTransparency = 1,
+			Text = isScriptSaved(details._id) and "Saved" or "Save Script",
+			Font = Theme.FontBold, TextSize = 11,
+			TextColor3 = Color3.new(1, 1, 1), ZIndex = 104,
+		})
+		saveBtn.MouseButton1Click:Connect(function()
+			local removed = false
+			for i, s in ipairs(SavedScripts) do
+				if s._id == details._id then
+					table.remove(SavedScripts, i); removed = true; break
+				end
+			end
+			if removed then
+				saveLbl.Text = "Save Script"
+				tween(saveBtn, 0.2, { BackgroundColor3 = Theme.Green })
+				Window:Notify("Removed", "Script removed from saved.", 3, "info")
+			else
+				table.insert(SavedScripts, details)
+				saveLbl.Text = "Saved"
+				tween(saveBtn, 0.2, { BackgroundColor3 = Theme.SurfaceAlt })
+				Window:Notify("Saved", "Script saved to your library.", 3, "success")
+			end
+			if _G.__AurenRefreshSaved then _G.__AurenRefreshSaved() end
+		end)
+		descPanel.Visible = true
+		descPanel.Position = UDim2.new(1, 10, 0, 0)
+		tween(descPanel, 0.4, { Position = UDim2.fromOffset(0, 0) },
+			Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	end
+	descBack.MouseButton1Click:Connect(function()
+		tween(descPanel, 0.35, { Position = UDim2.new(1, 10, 0, 0) },
+			Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.delay(0.4, function() descPanel.Visible = false end)
+	end)
+
+	local function createEntry(scriptData)
+		local entry = new("Frame", {
+			Parent = scriptList, Size = UDim2.new(1, 0, 0, 78),
+			BackgroundColor3 = Theme.Surface, BackgroundTransparency = 0.25,
+			BorderSizePixel = 0, ZIndex = 9,
+		})
+		round(entry, 10)
+		stroke(entry, Theme.Border, 1, 0.6)
+		new("TextLabel", {
+			Parent = entry, Position = UDim2.fromOffset(12, 8),
+			Size = UDim2.new(1, -110, 0, 16), BackgroundTransparency = 1,
+			Text = scriptData.title or "Untitled", Font = Theme.FontBold, TextSize = 12,
+			TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 10,
+		})
+		local gameName = scriptData.game and scriptData.game.name or "Universal"
+		new("TextLabel", {
+			Parent = entry, Position = UDim2.fromOffset(12, 24),
+			Size = UDim2.new(1, -110, 0, 14), BackgroundTransparency = 1,
+			Text = gameName, Font = Theme.Font, TextSize = 10,
+			TextColor3 = Theme.SubText, TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 10,
+		})
+		local badgeRow = new("Frame", {
+			Parent = entry, Position = UDim2.fromOffset(12, 42),
+			Size = UDim2.new(1, -110, 0, 18), BackgroundTransparency = 1, ZIndex = 10,
+		})
+		new("UIListLayout", {
+			Parent = badgeRow, FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		local o = 1
+		if scriptData.key == false then
+			makeBadge(badgeRow, "Keyless", Theme.Green, "key", o); o = o + 1
+		elseif scriptData.key == true then
+			makeBadge(badgeRow, "Key", Theme.Yellow, "key", o); o = o + 1
+		end
+		if scriptData.verified == true then
+			makeBadge(badgeRow, "Verified", Theme.Blue, "check", o); o = o + 1
+		end
+		if scriptData.isUniversal == true then
+			makeBadge(badgeRow, "Universal", Theme.Purple, "globe", o)
+		end
+		local copyBtn = new("TextButton", {
+			Parent = entry, AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, 10),
+			Size = UDim2.fromOffset(78, 26),
+			BackgroundColor3 = Theme.Blue, BackgroundTransparency = 0.15,
+			BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 11,
+		})
+		round(copyBtn, 7)
+		local ch = new("Frame", {
+			Parent = copyBtn, Position = UDim2.fromOffset(8, 7),
+			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, ZIndex = 12,
+		})
+		copyIcon(ch, Color3.new(1, 1, 1), 12)
+		new("TextLabel", {
+			Parent = copyBtn, Position = UDim2.fromOffset(24, 0),
+			Size = UDim2.new(1, -28, 1, 0), BackgroundTransparency = 1,
+			Text = "Copy", Font = Theme.FontMedium, TextSize = 10,
+			TextColor3 = Color3.new(1, 1, 1), ZIndex = 12,
+		})
+		copyBtn.MouseButton1Click:Connect(function()
+			local ok, details = pcall(fetchDetails, scriptData.slug)
+			if ok and details and details.script then
+				if copyText(details.script) then
+					Window:Notify("Copied", "Script copied.", 3, "success")
+				else
+					Window:Notify("Copy Failed", "No clipboard support.", 3, "error")
+				end
+			else
+				Window:Notify("Error", "Could not fetch script.", 3, "error")
+			end
+		end)
+		local saveBtn = new("TextButton", {
+			Parent = entry, AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, 40),
+			Size = UDim2.fromOffset(78, 26),
+			BackgroundColor3 = isScriptSaved(scriptData._id) and Theme.SurfaceAlt or Theme.Green,
+			BackgroundTransparency = 0.15,
+			BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 11,
+		})
+		round(saveBtn, 7)
+		local sh = new("Frame", {
+			Parent = saveBtn, Position = UDim2.fromOffset(8, 7),
+			Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, ZIndex = 12,
+		})
+		saveIcon(sh, Color3.new(1, 1, 1), 12)
+		local sl = new("TextLabel", {
+			Parent = saveBtn, Position = UDim2.fromOffset(24, 0),
+			Size = UDim2.new(1, -28, 1, 0), BackgroundTransparency = 1,
+			Text = isScriptSaved(scriptData._id) and "Saved" or "Save",
+			Font = Theme.FontMedium, TextSize = 10,
+			TextColor3 = Color3.new(1, 1, 1), ZIndex = 12,
+		})
+		saveBtn.MouseButton1Click:Connect(function()
+			if isScriptSaved(scriptData._id) then
+				for i, s in ipairs(SavedScripts) do
+					if s._id == scriptData._id then table.remove(SavedScripts, i); break end
+				end
+				sl.Text = "Save"
+				tween(saveBtn, 0.2, { BackgroundColor3 = Theme.Green })
+				Window:Notify("Removed", "Removed from saved.", 3, "info")
+			else
+				table.insert(SavedScripts, scriptData)
+				sl.Text = "Saved"
+				tween(saveBtn, 0.2, { BackgroundColor3 = Theme.SurfaceAlt })
+				Window:Notify("Saved", "Added to saved scripts.", 3, "success")
+			end
+			if _G.__AurenRefreshSaved then _G.__AurenRefreshSaved() end
+		end)
+		local hit = new("TextButton", {
+			Parent = entry, Position = UDim2.fromOffset(0, 0),
+			Size = UDim2.new(1, -100, 1, 0),
+			BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 8,
+		})
+		hit.MouseButton1Click:Connect(function()
+			local ok, details = pcall(fetchDetails, scriptData.slug)
+			if not ok or not details then
+				Window:Notify("Error", "Could not fetch details.", 3, "error")
+				return
+			end
+			openDescription(details)
+		end)
+		return entry
+	end
+
+	local debounce = false
+	local function runSearch()
+		if debounce then return end
+		debounce = true
+		task.delay(0.5, function() debounce = false end)
+		for _, ch in ipairs(scriptList:GetChildren()) do
+			if ch:IsA("Frame") then ch:Destroy() end
+		end
+		local q = searchInput.Text
+		local active = {}
+		if filters.key ~= nil then active.key = filters.key end
+		if filters.universal ~= nil then active.universal = filters.universal end
+		if filters.verified ~= nil then active.verified = filters.verified end
+		if q == "" and next(active) == nil then
+			statusLbl.Text = "Type a search or tap a filter to begin."
+			return
+		end
+		statusLbl.Text = "Searching…"
+		local scripts = fetchScripts(q, active)
+		if #scripts == 0 then
+			statusLbl.Text = "No scripts found. Try a different search."
+			return
+		end
+		statusLbl.Text = "Found " .. tostring(#scripts) .. " scripts"
+		for _, sd in ipairs(scripts) do createEntry(sd) end
+	end
+	searchInput.FocusLost:Connect(function(enter)
+		if enter then runSearch() end
+	end)
+	searchInput:GetPropertyChangedSignal("Text"):Connect(function()
+		task.delay(0.8, function()
+			if searchInput.Text ~= "" then runSearch() end
+		end)
+	end)
+	for _, fb in ipairs(filterButtons) do
+		fb.btn.MouseButton1Click:Connect(function() task.delay(0.1, runSearch) end)
+	end
+
+	local SavedTab = Window:AddTab("Saved", "•")
+	local savedSection = SavedTab:AddSection("Your Library")
+	local savedList = new("Frame", {
+		Parent = savedSection.Holder, Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+		LayoutOrder = 999, ZIndex = 8,
+	})
+	new("UIListLayout", {
+		Parent = savedList, Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+	local function refreshSaved()
+		for _, ch in ipairs(savedList:GetChildren()) do
+			if ch:IsA("Frame") then ch:Destroy() end
+		end
+		if #SavedScripts == 0 then
+			new("TextLabel", {
+				Parent = savedList, Size = UDim2.new(1, 0, 0, 30),
+				BackgroundTransparency = 1, Text = "No saved scripts yet.",
+				Font = Theme.Font, TextSize = 12, TextColor3 = Theme.SubText, ZIndex = 9,
+			})
+			return
+		end
+		for _, sd in ipairs(SavedScripts) do
+			local entry = new("Frame", {
+				Parent = savedList, Size = UDim2.new(1, 0, 0, 50),
+				BackgroundColor3 = Theme.Surface, BackgroundTransparency = 0.25,
+				BorderSizePixel = 0, ZIndex = 9,
+			})
+			round(entry, 10)
+			stroke(entry, Theme.Border, 1, 0.6)
+			new("TextLabel", {
+				Parent = entry, Position = UDim2.fromOffset(12, 8),
+				Size = UDim2.new(1, -100, 0, 16), BackgroundTransparency = 1,
+				Text = sd.title or "Untitled", Font = Theme.FontBold, TextSize = 12,
+				TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 10,
+			})
+			local cp = new("TextButton", {
+				Parent = entry, AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -44, 0.5, 0),
+				Size = UDim2.fromOffset(26, 26),
+				BackgroundColor3 = Theme.Blue, BackgroundTransparency = 0.3,
+				BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 10,
+			})
+			round(cp, 7)
+			local cpic = new("Frame", {
+				Parent = cp, AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, ZIndex = 11,
+			})
+			copyIcon(cpic, Color3.new(1, 1, 1), 12)
+			cp.MouseButton1Click:Connect(function()
+				local ok, details = pcall(fetchDetails, sd.slug)
+				if ok and details and details.script then
+					if copyText(details.script) then
+						Window:Notify("Copied", "Script copied.", 3, "success")
+					end
+				end
+			end)
+			local rm = new("TextButton", {
+				Parent = entry, AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.fromOffset(26, 26),
+				BackgroundColor3 = Theme.Red, BackgroundTransparency = 0.3,
+				BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 10,
+			})
+			round(rm, 7)
+			for _, rot in ipairs({ 45, -45 }) do
+				local bar = new("Frame", {
+					Parent = rm, AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromOffset(8, 2),
+					BackgroundColor3 = Color3.new(1, 1, 1),
+					BorderSizePixel = 0, Rotation = rot, ZIndex = 11,
+				})
+				round(bar, 1)
+			end
+			rm.MouseButton1Click:Connect(function()
+				for i, s in ipairs(SavedScripts) do
+					if s._id == sd._id then table.remove(SavedScripts, i); break end
+				end
+				refreshSaved()
+				Window:Notify("Removed", "Script removed.", 3, "info")
+			end)
+		end
+	end
+	refreshSaved()
+	_G.__AurenRefreshSaved = refreshSaved
+
+	local MainTab = Window:AddTab("Main", "•")
+	local Main = MainTab:AddSection("Welcome")
+	Main:AddLabel("Browse ScriptBlox from the Hub tab.")
+	Main:AddButton("Test notification", function()
+		Window:Notify("Auren", "Everything works.", 3, "success")
+	end)
+
+	Window:Notify("Auren", "Hub loaded. Search something!", 4, "success")
+
+	return {
+		Auren        = Auren,
+		Window       = Window,
+		SavedScripts = SavedScripts,
+		Refresh      = refreshSaved,
+	}
+end
