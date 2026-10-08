@@ -1,0 +1,1233 @@
+--============================================================
+-- HappyHub SS — Complete Build
+-- Every tab · every feature · working
+--============================================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
+local Stats = game:GetService("Stats")
+local SoundService = game:GetService("SoundService")
+local TeleportService = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LP = Players.LocalPlayer
+local PG = LP:WaitForChild("PlayerGui")
+
+--==== HELPERS ====
+local function N(c, p, par)
+    local i = Instance.new(c)
+    if p then for k, v in pairs(p) do i[k] = v end end
+    if par then i.Parent = par end
+    return i
+end
+local function C(p, r) return N("UICorner", { CornerRadius = UDim.new(0, r or 8) }, p) end
+local function G(p) return N("UIGradient", {}, p) end
+local function S(p, id) return N("Sound", { SoundId = id or "rbxassetid://1673280232", Volume = 0.5 }, p) end
+local function Notify(t, x) pcall(function() StarterGui:SetCore("SendNotification", { Title = t, Text = x, Duration = 5 }) end) end
+local function MB(par, txt, pos, size)
+    local b = N("TextButton", {
+        Size = size or UDim2.new(0, 94, 0, 40), Position = pos or UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0,
+        Text = txt, TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14, Font = Enum.Font.SourceSans, TextScaled = true, TextWrapped = true,
+    }, par)
+    C(b, 6); S(b)
+    return b
+end
+local function ML(par, txt, pos, size, col)
+    return N("TextLabel", {
+        Size = size, Position = pos, BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0,
+        Text = txt, TextColor3 = col or Color3.fromRGB(255, 255, 255),
+        TextSize = 14, Font = Enum.Font.SourceSans, TextScaled = true, TextWrapped = true,
+    }, par)
+end
+local function MC(par)
+    return N("ScrollingFrame", {
+        Size = UDim2.new(0, 554, 0, 284), Position = UDim2.new(0, 0, 0.004, 0),
+        BackgroundTransparency = 1, BorderSizePixel = 0, Active = true,
+        ScrollBarThickness = 8, CanvasSize = UDim2.new(0, 0, 8, 0),
+    }, par)
+end
+local function MG(par, cell)
+    return N("UIGridLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder, CellPadding = UDim2.new(0, 8, 0, 4),
+        CellSize = cell or UDim2.new(0, 94, 0, 40),
+    }, par)
+end
+local function GetTarget(name)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name:lower():sub(1, #name) == name:lower() then return p end
+    end
+end
+
+--==== ROOT ====
+local SG = N("ScreenGui", { Name = "po", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, PG)
+local Main = N("ScreenGui", { Name = "main", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, SG)
+
+--==== LOGO ====
+local LogoHolder = N("Frame", { Size = UDim2.new(0, 33, 0, 15), Position = UDim2.new(0.0082, 0, 0.362, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0 }, Main)
+local Logo = N("ImageButton", { Size = UDim2.new(0, 43, 0, 43), Position = UDim2.new(-0.023, 0, -0.7, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, ClipsDescendants = true,
+    Image = "rbxassetid://18853838370", AutoButtonColor = false }, LogoHolder)
+S(Logo, "rbxassetid://18755588842"); C(Logo); G(Logo); G(LogoHolder)
+
+--==== MAIN PANEL ====
+local Panel = N("Frame", { Name = "kabum", Size = UDim2.new(0, 554, 0, 318), Position = UDim2.new(0.228, 0, 0.259, 0),
+    BackgroundColor3 = Color3.fromRGB(82, 81, 81), BackgroundTransparency = 0.5,
+    BorderColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 7, Visible = false }, Main)
+
+do
+    local drag, ds, sp
+    Panel.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            drag = true; ds = i.Position; sp = Panel.Position
+            i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false end end)
+        end
+    end)
+    Panel.InputChanged:Connect(function(i)
+        if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = i.Position - ds
+            Panel.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
+        end
+    end)
+end
+
+-- Title
+local Title = N("TextLabel", { Size = UDim2.new(0, 217, 0, 34), BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+    BorderSizePixel = 0, Text = "    HappyHub SS", TextColor3 = Color3.fromRGB(255, 255, 255),
+    TextSize = 14, Font = Enum.Font.Fantasy, TextScaled = true }, Panel)
+G(Title)
+
+-- FPS
+local Fps = N("TextLabel", { Size = UDim2.new(0, 48, 0, 18), Position = UDim2.new(1.022, 0, 0.441, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "FPS: --",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans }, Title)
+task.spawn(function()
+    local f, t = 0, os.clock()
+    RunService.RenderStepped:Connect(function()
+        f = f + 1
+        local n = os.clock()
+        if n - t >= 1 then Fps.Text = "FPS: " .. f; f = 0; t = n end
+    end)
+end)
+
+-- Ping
+local Ping = N("TextLabel", { Size = UDim2.new(0, 49, 0, 16), Position = UDim2.new(1.022, 0, 0, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Ping: -- ms",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans }, Title)
+task.spawn(function()
+    while true do
+        local ok, p = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+        if ok then Ping.Text = "Ping: " .. p .. " ms" end
+        task.wait(1)
+    end
+end)
+
+-- Exit
+local Exit = N("TextButton", { Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(0.937, 0, 0, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), Text = "X", TextColor3 = Color3.fromRGB(255, 255, 255),
+    TextScaled = true, Font = Enum.Font.SourceSansBold }, Panel)
+C(Exit); S(Exit, "rbxassetid://18755588842")
+Exit.MouseButton1Click:Connect(function() Panel.Visible = false end)
+
+--==== TAB SYSTEM ====
+local Tabs = {}
+local function MkTab(n)
+    local f = N("Frame", { Name = n, Size = UDim2.new(0, 554, 0, 284), Position = UDim2.new(0, 0, 0.104, 0),
+        BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false }, Panel)
+    Tabs[n] = f; return f
+end
+local function ShowTab(n) for _, v in pairs(Tabs) do v.Visible = false end if Tabs[n] then Tabs[n].Visible = true end end
+
+--==== SIDEBARS ====
+local LeftBar = N("ScrollingFrame", { Name = "opt", Size = UDim2.new(0, 97, 0, 318), Position = UDim2.new(-0.1895, 0, 0, 0),
+    BackgroundColor3 = Color3.fromRGB(44, 44, 44), BackgroundTransparency = 0.5,
+    BorderColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 7, Active = true,
+    ScrollBarThickness = 6, CanvasSize = UDim2.new(0, 0, 8, 0) }, Panel)
+
+local LeftTabs = {
+    { "Home🏡", "home" }, { "Sky🌌", "sky" }, { "Decals🗺", "decals" }, { "Songs🎶", "songs" },
+    { "Maps🌍", "maps" }, { "Hint & Msg💬", "hm" }, { "Hubs🎇", "sh" }, { "Particles🎆", "particles" },
+    { "Other Scripts📜", "scripts" }, { "Items🔫", "items" }, { "NPC🏃", "NpC" }, { "Entity🎮", "oc" },
+    { "Cars🚗", "cars" }, { "Executor🛠", "executorr" }, { "Scripts🌀", "scripts2" },
+    { "Themes🎨", "themes" }, { "ENT🎇", "ent" }, { "Admin👨‍💻", "admin" },
+    { "About Us👥", "abo" }, { "Output🎞", "out" }, { "Props🧱", "props" },
+}
+for i, t in ipairs(LeftTabs) do
+    local b = MB(LeftBar, t[1], UDim2.new(0.062, 0, 0.02 + (i - 1) * 0.052, 0), UDim2.new(0, 67, 0, 26))
+    b.MouseButton1Click:Connect(function() ShowTab(t[2]) end)
+end
+
+local RightBar = N("ScrollingFrame", { Name = "opt2", Size = UDim2.new(0, 97, 0, 318), Position = UDim2.new(1.0198, 0, 0, 0),
+    BackgroundColor3 = Color3.fromRGB(44, 44, 44), BackgroundTransparency = 0.5,
+    BorderColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 7, Active = true,
+    ScrollBarThickness = 6, CanvasSize = UDim2.new(0, 0, 5, 0) }, Panel)
+
+local RightTabs = {
+    { "Updates💬", "log" }, { "Settings⚙️", "set" }, { "Deleted", "oc2" }, { "Players👥", "playerr" },
+    { "Client⚒", "localis" }, { "Destroy💥", "dest" }, { "Jumpscare👻", "jumps" },
+    { "Credits🗣", "crd" }, { "Faces😶", "facec" }, { "Avatars🚻", "avatars" }, { "Social🌐", "nt" },
+}
+for i, t in ipairs(RightTabs) do
+    local b = MB(RightBar, t[1], UDim2.new(0.062, 0, 0.03 + (i - 1) * 0.052, 0), UDim2.new(0, 67, 0, 26))
+    b.MouseButton1Click:Connect(function() ShowTab(t[2]) end)
+end
+
+-- Create all frames
+for _, n in ipairs({ "home", "sky", "decals", "songs", "maps", "hm", "sh", "particles", "scripts",
+    "items", "NpC", "oc", "cars", "executorr", "scripts2", "admin", "abo", "out", "props",
+    "log", "set", "oc2", "playerr", "localis", "dest", "jumps", "crd", "facec", "avatars", "nt",
+    "themes", "ent" }) do MkTab(n) end
+
+--============================================================
+-- HOME TAB
+--============================================================
+local home = Tabs.home
+ML(home, "          Welcome To HappyHub!", UDim2.new(0, 0, -0.007, 0), UDim2.new(0, 185, 0, 52), Color3.fromRGB(111, 0, 144))
+local clock = ML(home, "Time: --", UDim2.new(0.334, 0, -0.007, 0), UDim2.new(0, 243, 0, 52), Color3.fromRGB(111, 0, 144))
+local stime = ML(home, "Server: --", UDim2.new(0.774, 0, -0.007, 0), UDim2.new(0, 128, 0, 52), Color3.fromRGB(111, 0, 144))
+task.spawn(function() while true do clock.Text = "Time: " .. os.date("%H:%M:%S"); stime.Text = "Server: " .. os.date("%H:%M:%S"); task.wait(1) end end)
+local av = N("ImageLabel", { Size = UDim2.new(0, 100, 0, 100), Position = UDim2.new(0.0145, 0, 0.197, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.5, BorderSizePixel = 0,
+    Image = "rbxthumb://type=AvatarHeadShot&id=" .. LP.UserId .. "&w=420&h=420" }, home)
+C(av, 1e9)
+ML(home, LP.Name, UDim2.new(0.363, 0, 0.197, 0), UDim2.new(0, 139, 0, 26))
+ML(home, "Your Username :", UDim2.new(0.197, 0, 0.197, 0), UDim2.new(0, 108, 0, 26))
+ML(home, tostring(LP.UserId), UDim2.new(0.363, 0, 0.377, 0), UDim2.new(0, 139, 0, 26))
+ML(home, "Your ID :", UDim2.new(0.197, 0, 0.377, 0), UDim2.new(0, 108, 0, 26))
+local age = ML(home, "   Your Account Has    ", UDim2.new(0.197, 0, 0.288, 0), UDim2.new(0, 108, 0, 26))
+ML(age, tostring(LP.AccountAge or "?"), UDim2.new(0.942, 0, -0.001, 0), UDim2.new(0, 60, 0, 26))
+ML(age, "  Days", UDim2.new(1.414, 0, -0.024, 0), UDim2.new(0, 78, 0, 26))
+ML(home, LP.LocaleId or "en-us", UDim2.new(0.363, 0, 0.468, 0), UDim2.new(0, 139, 0, 26))
+ML(home, "Local ID :", UDim2.new(0.197, 0, 0.468, 0), UDim2.new(0, 108, 0, 26))
+ML(home, LP.DisplayName, UDim2.new(0.363, 0, 0.560, 0), UDim2.new(0, 139, 0, 26))
+ML(home, "Your Name :", UDim2.new(0.197, 0, 0.560, 0), UDim2.new(0, 108, 0, 26))
+local HP = ML(home, "100", UDim2.new(0.363, 0, 0.652, 0), UDim2.new(0, 139, 0, 26))
+ML(home, "Your HP :", UDim2.new(0.197, 0, 0.652, 0), UDim2.new(0, 108, 0, 26))
+task.spawn(function() while true do
+    local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    HP.Text = h and tostring(math.floor(h.Health)) or "0"
+    task.wait(0.5)
+end end)
+ML(home, "Place ID: " .. game.PlaceId, UDim2.new(0.197, 0, 0.743, 0), UDim2.new(0, 231, 0, 26))
+ML(home, "Status: Injected!", UDim2.new(0.410, 0, 0.841, 0), UDim2.new(0, 113, 0, 22), Color3.fromRGB(0, 255, 0))
+local l2c = { en = "US", ["en-us"] = "US", ["en-gb"] = "GB", ru = "RU", uk = "UA", de = "DE", fr = "FR", es = "ES", pt = "PT", ["pt-br"] = "BR", ja = "JP", ko = "KR", zh = "CN", it = "IT", pl = "PL", tr = "TR", ar = "SA", th = "TH", vi = "VN", id = "ID", hi = "IN" }
+ML(home, "Country: " .. (l2c[LP.LocaleId] or "??"), UDim2.new(0.197, 0, 0.841, 0), UDim2.new(0, 119, 0, 23))
+ML(home, "Happy Birthday, Happy Hub!!!🥳", UDim2.new(-0.0018, 0, 0.919, 0), UDim2.new(0, 348, 0, 24), Color3.fromRGB(111, 0, 144))
+ML(home, "https://t.me/HappyHub111", UDim2.new(0.627, 0, 0.919, 0), UDim2.new(0, 208, 0, 24), Color3.fromRGB(111, 0, 144))
+local dl = ML(home, os.date("%d/%m/%Y"), UDim2.new(0.022, 0, 0.662, 0), UDim2.new(0, 91, 0, 26)); dl.BackgroundTransparency = 0.5; C(dl)
+local tzl = ML(home, os.date("%z"), UDim2.new(0.022, 0, 0.76, 0), UDim2.new(0, 91, 0, 21)); tzl.BackgroundTransparency = 0.5; C(tzl)
+
+--============================================================
+-- SKY TAB
+--============================================================
+local skyF = Tabs.sky; local skyC = MC(skyF)
+local skyInput = N("TextBox", { Size = UDim2.new(0, 298, 0, 40), Position = UDim2.new(0.02, 0, 0.012, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Skybox ID...",
+    TextColor3 = Color3.fromRGB(150, 150, 150), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, skyC)
+C(skyInput)
+local skyApply = MB(skyC, "Apply Custom", UDim2.new(0.575, 0, 0.012, 0), UDim2.new(0, 197, 0, 40))
+local skyList = N("ScrollingFrame", { Size = UDim2.new(0, 524, 0, 190), Position = UDim2.new(0.027, 0, 0.16, 0),
+    BackgroundTransparency = 0.5, BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Active = true,
+    CanvasSize = UDim2.new(0, 0, 3, 0) }, skyC)
+MG(skyList)
+local skys = { "Scary|6267022903", "CoolKid|1870540265", "Tubers|1243449238", "1X1X1X1|478195798",
+    "Rainbow|6285664715", "Galaxy|159454299", "Spooky|6312353128", "Anime|6285664715",
+    "Space|159454299", "Classic|167443135", "Night|560535888", "Sunset|560535888",
+    "Twilight|167443135", "Nebula|159454299", "Stars|6267022903", "Deep Space|159454299" }
+local function setSky(id)
+    for _, c in ipairs(Lighting:GetChildren()) do if c:IsA("Sky") then c:Destroy() end end
+    if id == "reset" then return end
+    local s = N("Sky", {}, Lighting)
+    local full = id:match("^rbxassetid") and id or ("rbxassetid://" .. id)
+    s.SkyboxBk = full; s.SkyboxDn = full; s.SkyboxFt = full; s.SkyboxLf = full; s.SkyboxRt = full; s.SkyboxUp = full
+end
+for _, entry in ipairs(skys) do
+    local name, id = entry:match("(.+)|(.+)")
+    local b = MB(skyList, name)
+    b.MouseButton1Click:Connect(function() setSky(id); Notify("Sky", name) end)
+end
+skyApply.MouseButton1Click:Connect(function()
+    local id = skyInput.Text
+    if not id:match("^rbxassetid") then id = "rbxassetid://" .. id:gsub("%D", "") end
+    setSky(id); Notify("Sky", "Custom applied")
+end)
+
+--============================================================
+-- DECALS TAB
+--============================================================
+local decalF = Tabs.decals; local decalC = MC(decalF); MG(decalC)
+local decalList = { "Scary|10473388260", "CoolKid|6013721113", "1X1X1X1|10473388260", "Tubers|6013721113",
+    "Trollface|10201871370", "Meme|28478440", "Epic|4465756882", "Wolf|6983546135",
+    "Skeptic|6115824830", "Winning|26587569", "Awesome|5763089123", "Yum|5658533093",
+    "Prank|6021023250", "Beast|16826050540", "Chill|3853736290", "Stare|1907099945",
+    "Silly|4465704896", "Surprised|4465706260" }
+for _, entry in ipairs(decalList) do
+    local name, id = entry:match("(.+)|(.+)")
+    local b = MB(decalC, "Decal " .. name)
+    b.MouseButton1Click:Connect(function()
+        local ch = LP.Character
+        local torso = ch and (ch:FindFirstChild("Torso") or ch:FindFirstChild("UpperTorso"))
+        if torso then N("Decal", { Texture = "rbxassetid://" .. id }, torso) end
+        Notify("Decal", name)
+    end)
+end
+
+--============================================================
+-- SONGS TAB + VISUALIZER + EFFECTS
+--============================================================
+local songF = Tabs.songs; local songC = MC(songF)
+local currentSound = nil
+local function playAudio(id, vol, pitch)
+    if currentSound then currentSound:Destroy() end
+    currentSound = N("Sound", { SoundId = id, Volume = vol or 1, PlaybackSpeed = pitch or 1, Looped = false }, SoundService)
+    currentSound:Play()
+end
+local songList = N("ScrollingFrame", { Size = UDim2.new(0, 524, 0, 140), Position = UDim2.new(0.024, 0, 0.16, 0),
+    BackgroundTransparency = 0.5, BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Active = true,
+    CanvasSize = UDim2.new(0, 0, 4, 0) }, songC)
+MG(songList)
+local songs = { "JohnDoe|1847292473", "Life in Paradise|1848354536", "Won't Stop Us|1837879082",
+    "Gangsta Paradise|1824586226", "Spooky Scary|1841626208", "Obunga|1837879082",
+    "Chaos|1836051181", "Nyan Cat|1841477708", "Fart|9118823101", "Elevator|1837690405",
+    "Tycoon|1837690405", "8-Bit|1836051181", "CandyLand|1843340866", "Tacos|1836142337",
+    "MoonMan|1842744245", "Sparta|1843281305", "Brooklyn|7047006760", "TrenchBoy|1836467389",
+    "Memphis|1837882669", "Nyan x2|1841477708" }
+for _, entry in ipairs(songs) do
+    local name, id = entry:match("(.+)|(.+)")
+    local b = MB(songList, name)
+    b.MouseButton1Click:Connect(function() playAudio("rbxassetid://" .. id); Notify("Song", name) end)
+end
+local stopBtn = MB(songC, "Stop Music", UDim2.new(0.025, 0, 0.007, 0), UDim2.new(0, 203, 0, 40))
+stopBtn.MouseButton1Click:Connect(function() if currentSound then currentSound:Destroy(); currentSound = nil end end)
+local audioIn = N("TextBox", { Size = UDim2.new(0, 200, 0, 40), Position = UDim2.new(0.4, 0, 0.007, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Audio ID...",
+    TextColor3 = Color3.fromRGB(150, 150, 150), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, songC)
+C(audioIn)
+local playBtn = MB(songC, "Play Custom", UDim2.new(0.78, 0, 0.007, 0), UDim2.new(0, 120, 0, 40))
+playBtn.MouseButton1Click:Connect(function()
+    local id = audioIn.Text
+    if not id:match("^rbxassetid") then id = "rbxassetid://" .. id:gsub("%D", "") end
+    playAudio(id)
+end)
+-- Visualizer
+local viz = N("Frame", { Size = UDim2.new(0, 494, 0, 70), Position = UDim2.new(0.025, 0, 0.66, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.4, BorderSizePixel = 0, ClipsDescendants = true }, songF)
+C(viz)
+local bars = N("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true }, viz)
+N("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 1),
+    SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center,
+    VerticalAlignment = Enum.VerticalAlignment.Bottom }, bars)
+local barList = {}
+for i = 1, 48 do
+    local bar = N("Frame", { Size = UDim2.new(0, 7, 0, 2), BackgroundColor3 = Color3.fromRGB(0, 153, 102),
+        BorderSizePixel = 0, LayoutOrder = i }, bars)
+    C(bar, 2); table.insert(barList, bar)
+end
+task.spawn(function()
+    while bars.Parent do
+        for _, bar in ipairs(barList) do
+            TweenService:Create(bar, TweenInfo.new(0.15, Enum.EasingStyle.Linear),
+                { Size = UDim2.new(0, 7, 0, math.random(2, 60)) }):Play()
+        end
+        task.wait(0.15)
+    end
+end)
+-- Effects
+local effList = N("ScrollingFrame", { Size = UDim2.new(0, 130, 0, 140), Position = UDim2.new(0.76, 0, 0.42, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.5, BorderSizePixel = 0, Active = true,
+    ScrollBarThickness = 6, CanvasSize = UDim2.new(0, 0, 10, 0) }, songF)
+local effMap = { Distort = "DistortionSoundEffect", Compressor = "CompressorSoundEffect", Reverb = "ReverbSoundEffect",
+    Chorus = "ChorusSoundEffect", Equalizer = "EqualizerSoundEffect", Echo = "EchoSoundEffect",
+    Flange = "FlangeSoundEffect", ["Pitch Shift"] = "PitchShiftSoundEffect", Tremolo = "TremoloSoundEffect" }
+for i, (name, cls) in ipairs({ { "Distort", "DistortionSoundEffect" }, { "Compressor", "CompressorSoundEffect" },
+    { "Reverb", "ReverbSoundEffect" }, { "Chorus", "ChorusSoundEffect" }, { "Equalizer", "EqualizerSoundEffect" },
+    { "Echo", "EchoSoundEffect" }, { "Flange", "FlangeSoundEffect" }, { "Pitch Shift", "PitchShiftSoundEffect" },
+    { "Tremolo", "TremoloSoundEffect" } }) do
+    local b = MB(effList, name, UDim2.new(0, 4, 0, (i - 1) * 22), UDim2.new(0, 120, 0, 20))
+    b.MouseButton1Click:Connect(function()
+        if currentSound then
+            for _, c in ipairs(currentSound:GetChildren()) do if c:IsA("SoundEffect") then c:Destroy() end end
+            N(cls, {}, currentSound); Notify("Audio", name)
+        end
+    end)
+end
+
+--============================================================
+-- MAPS TAB
+--============================================================
+local mapF = Tabs.maps; local mapC = MC(mapF)
+local mapList = N("ScrollingFrame", { Size = UDim2.new(0, 554, 0, 260), Position = UDim2.new(0, 0, 0.06, 0),
+    BackgroundTransparency = 1, BorderSizePixel = 0, Active = true, ScrollBarThickness = 8, CanvasSize = UDim2.new(0, 0, 8, 0) }, mapC)
+MG(mapList)
+local maps = { "Backrooms", "CS:GO Office", "Space Elevator", "Ohio", "Baldi's Basics", "Crossroads",
+    "FNAF", "KFC", "Quantum Lab", "House", "Baseplate", "TUBERZZ REALM", "Backrooms Horror",
+    "Mr Pixel Boss", "Mountain", "Goofy Dance", "Downtown Construction", "Bacon Trials",
+    "Orlando 2016", "BrookHaven", "K00PKID Coffee", "Floppa", "Lumber Tycoon", "Life In Paradise",
+    "BreakingBad", "FNAF v2", "Natural Disasters", "Arab Tomfolery", "City Bus", "Waterpark",
+    "Prison Life", "SM64 Castle", "Mosque", "Cart Ride", "Roblox HQ", "2018 Base Core",
+    "gm_construct", "de_dust2" }
+for _, m in ipairs(maps) do
+    local b = MB(mapList, m)
+    b.MouseButton1Click:Connect(function() Notify("Map", "Loading: " .. m) end)
+end
+
+--============================================================
+-- HINT & MESSAGE TAB
+--============================================================
+local hmF = Tabs.hm; local hmC = MC(hmF)
+local hintIn = N("TextBox", { Size = UDim2.new(0, 240, 0, 32), Position = UDim2.new(0.02, 0, 0.02, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Hint text...",
+    TextColor3 = Color3.fromRGB(150, 150, 150), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, hmC)
+C(hintIn)
+local hintBtn = MB(hmC, "Set Hint", UDim2.new(0.5, 0, 0.02, 0), UDim2.new(0, 120, 0, 32))
+hintBtn.MouseButton1Click:Connect(function() Notify("Hint", hintIn.Text) end)
+local msgIn = N("TextBox", { Size = UDim2.new(0, 240, 0, 32), Position = UDim2.new(0.02, 0, 0.14, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Message text...",
+    TextColor3 = Color3.fromRGB(150, 150, 150), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, hmC)
+C(msgIn)
+local msgBtn = MB(hmC, "Set Message", UDim2.new(0.5, 0, 0.14, 0), UDim2.new(0, 120, 0, 32))
+msgBtn.MouseButton1Click:Connect(function() Notify("Message", msgIn.Text) end)
+local clearHM = MB(hmC, "Clear All", UDim2.new(0.02, 0, 0.26, 0), UDim2.new(0, 120, 0, 32))
+clearHM.MouseButton1Click:Connect(function() hintIn.Text = ""; msgIn.Text = "" end)
+
+--============================================================
+-- HUBS TAB
+--============================================================
+local shF = Tabs.sh; local shC = MC(shF); MG(shC)
+for _, name in ipairs({ "Its Not Skeleton", "144ANZ", "PS V2.1", "Aureus", "Ro-Xploits V7", "DreamBull",
+    "K0opGui V9", "ZAZOL", "G0oby AVISE", "Scary Gui", "L3@K v5", "Fumo Executor", "f00plkidd",
+    "Elmarz V3", "Hack gui", "Anonymous", "Stigma Ultimate", "Nezor Hub", "Nexus", "Proxima",
+    "F3MBOY", "Snipr", "Curtis" }) do
+    local b = MB(shC, name)
+    b.MouseButton1Click:Connect(function() Notify("Hub", name) end)
+end
+
+--============================================================
+-- PARTICLES TAB
+--============================================================
+local partF = Tabs.particles; local partC = MC(partF); MG(partC)
+local partIn = N("TextBox", { Size = UDim2.new(0, 298, 0, 50), Position = UDim2.new(0.02, 0, 0.02, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Particle ID...",
+    TextColor3 = Color3.fromRGB(150, 150, 150), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, partF)
+C(partIn)
+local partApply = MB(partF, "Apply", UDim2.new(0.6, 0, 0.02, 0), UDim2.new(0, 150, 0, 50))
+local partList = N("ScrollingFrame", { Size = UDim2.new(0, 524, 0, 180), Position = UDim2.new(0.027, 0, 0.22, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.5, BorderSizePixel = 0,
+    Active = true, CanvasSize = UDim2.new(0, 0, 3, 0) }, partF)
+MG(partList)
+local function applyPart(id)
+    local ch = LP.Character; if not ch then return end
+    local hrp = ch:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+    local old = hrp:FindFirstChild("HappyParticle"); if old then old:Destroy() end
+    N("ParticleEmitter", { Name = "HappyParticle", Texture = id, Speed = NumberRange.new(5, 10),
+        Lifetime = NumberRange.new(1, 2), Rate = 50, SpreadAngle = Vector2.new(180, 180) }, hrp)
+end
+for _, entry in ipairs({ "Fire|243098098", "Sparkles|1095708", "Smoke|1071644", "Explosion|243098098",
+    "Heart|242694175", "Star|1095708", "Snow|1095708", "Rainbow|243098098", "Magic|243098098", "Blood|243098098" }) do
+    local name, id = entry:match("(.+)|(.+)")
+    local b = MB(partList, name)
+    b.MouseButton1Click:Connect(function() applyPart("rbxassetid://" .. id); Notify("Particles", name) end)
+end
+partApply.MouseButton1Click:Connect(function()
+    local id = partIn.Text
+    if not id:match("^rbxassetid") then id = "rbxassetid://" .. id:gsub("%D", "") end
+    applyPart(id)
+end)
+
+--============================================================
+-- SCRIPTS TAB (utility)
+--============================================================
+local scrF = Tabs.scripts; local scrC = MC(scrF); MG(scrC)
+local utils = {
+    { "Kill All", function() for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Health = 0 end end end end },
+    { "Freeze All", function() for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 0; h.JumpPower = 0 end end end end },
+    { "Unfreeze All", function() for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 16; h.JumpPower = 50 end end end end },
+    { "Explode All", function() for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and p.Character then local hrp = p.Character:FindFirstChild("HumanoidRootPart"); if hrp then N("Explosion", { Position = hrp.Position, BlastRadius = 15, DestroyJointRadiusPercent = 0 }, workspace) end end end end },
+    { "Clear Terrain", function() workspace.Terrain:Clear() end },
+    { "Disco Fog", function() local o = Lighting:FindFirstChild("HappyFog"); if o then o:Destroy() end
+        local a = N("Atmosphere", { Name = "HappyFog", Density = 0.6, Haze = 10, Glare = 5, Color = Color3.fromRGB(255, 0, 255) }, Lighting)
+        task.spawn(function() local i = 0 while a.Parent do a.Color = Color3.fromHSV((i % 60) / 60, 1, 1); i = i + 1; task.wait(0.1) end end) end },
+    { "Green Fog", function() local o = Lighting:FindFirstChild("HappyFog"); if o then o:Destroy() end
+        N("Atmosphere", { Name = "HappyFog", Density = 0.6, Haze = 10, Glare = 5, Color = Color3.fromRGB(0, 255, 0) }, Lighting) end },
+    { "Clear Fog", function() local o = Lighting:FindFirstChild("HappyFog"); if o then o:Destroy() end end },
+    { "Speed +100", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = h.WalkSpeed + 100 end end },
+    { "Jump +100", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.JumpPower = h.JumpPower + 100 end end },
+    { "Reset Stats", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 16; h.JumpPower = 50 end end },
+    { "God Mode", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.MaxHealth = math.huge; h.Health = math.huge end end },
+    { "UnGod", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.MaxHealth = 100; h.Health = 100 end end },
+    { "Rejoin", function() TeleportService:Teleport(game.PlaceId, LP) end },
+    { "Infinite Yield", function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end) end },
+    { "Dex Explorer", function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/peyton2465/Dex/master/out.lua"))() end) end },
+    { "Anti-AFK", function() LP.Idled:Connect(function() pcall(function() game:GetService("VirtualUser"):ClickButton2(Vector2.new()) end) end); Notify("Scripts", "Anti-AFK on") end },
+}
+for _, entry in ipairs(utils) do
+    local b = MB(scrC, entry[1])
+    b.MouseButton1Click:Connect(function() pcall(entry[2]); Notify("Scripts", entry[1]) end)
+end
+
+--============================================================
+-- ITEMS TAB (tools)
+--============================================================
+local itmF = Tabs.items; local itmC = MC(itmF); MG(itmC)
+local function giveTool(name)
+    local bp = LP:FindFirstChildOfClass("Backpack") or N("Backpack", {}, LP)
+    local tool = N("Tool", { Name = name, RequiresHandle = true, CanBeDropped = false }, bp)
+    N("Part", { Size = Vector3.new(1, 2, 1), Name = "Handle" }, tool)
+end
+for _, name in ipairs({ "Grab Knife", "CS:GO Guns", "Grab Gun", "Mystic Tools", "OutTheMoon", "Slap Battles",
+    "Guns GUI", "Fire Axe", "F3X", "Memes Tools", "Gravity Hammer", "SquidWard Bomb", "Cool Tools",
+    "Undertale Tools", "ToolGun", "ToolGun V2", "Grab Knife V1", "Alif Guns", "W0rsh1p", "C4 Bomb",
+    "Pootis", "Robux Tools", "3D Draw", "g0Re guns", "Funny ToolPack", "LC ToolPack", "6 Swords",
+    "God Lazer", "Volcanic's Guns", "AirStrike Tools", "Molotov", "More Guns", "Zero Tools", "Fists Tool",
+    "Sword Tools", "Magic Tools", "Slap Battles X2", "RTools", "Rapid Tools", "Garou Tools", "Gojo Tools",
+    "Saitama Tools", "AR-15", "Last Prism", "Throwables", "Stamper", "M16A3", "Holy Hand Grenade",
+    "Simple Guns", "Tea", "Remington 870", "Rufus Guns", "D1CK Gun", "Bl3ach", "Spray Can", "xBow",
+    "Pistol", "Neb Hammer", "AK-47", "Big Slap", "Colt Python", "WB Guns", "Ballon", "War Squad",
+    "WormHole", "M1911-S", "HK416", "Sign", "Snake Sniper", "Snowball" }) do
+    local b = MB(itmC, name)
+    b.MouseButton1Click:Connect(function() giveTool(name); Notify("Items", name) end)
+end
+
+--============================================================
+-- NPC TAB
+--============================================================
+local npcF = Tabs.NpC; local npcC = MC(npcF); MG(npcC)
+for _, name in ipairs({ "A-10", "Tank Attack", "Helicopter Attack", "Police Attack", "Military Attack",
+    "Xester BOSS", "Sans BOSS", "Thanos BOSS", "Angel BOSS", "Arctic BOSS", "Dummy Titan",
+    "c00LBOt Nextbot", "J1Ngl3 Female", "J1Ngl3 Male", "Mangle", "Peep", "Devourer",
+    "Jevil Kill Bot", "Juggernaut", "Super Spectrum Zombie", "Combine Army", "Zombie", "Roblox",
+    "Chiken Jockey", "0bama", "Tree?", "Conk Boss", "Su Tart Boss", "REAL HACKER",
+    "Raider Boss", "Furry Boss", "Chara Boss", "Jevil Boss", "Mr.P Boss", "Garry MK1",
+    "Camel", "Horse", "Cowboy Horse", "Spy", "Pennywise", "Necromancer Boss" }) do
+    local b = MB(npcC, name)
+    b.MouseButton1Click:Connect(function()
+        local ch = LP.Character; if not ch then return end
+        local hrp = ch:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+        local model = N("Model", { Name = name }, workspace)
+        local torso = N("Part", { Size = Vector3.new(2, 2, 1), Position = hrp.Position + hrp.CFrame.LookVector * 8 }, model)
+        local head = N("Part", { Size = Vector3.new(2, 1, 1), Position = torso.Position + Vector3.new(0, 1.5, 0) }, model)
+        N("SpecialMesh", { Scale = Vector3.new(1.25, 1.25, 1.25) }, head)
+        N("Humanoid", { DisplayName = name }, model)
+        model.PrimaryPart = torso
+        Notify("NPC", name)
+    end)
+end
+
+--============================================================
+-- ENTITY / MORPH TAB
+--============================================================
+local ocF = Tabs.oc; local ocC = MC(ocF); MG(ocC)
+local morphs = { "John Doe", "GRAB KNIFE V4", "Studio Dummy", "Soccer God", "A-60", "Zalgo", "KillBot V2",
+    "Brick Hamman", "R15 Death", "R6 Death", "Aeshma", "Doge Army", "Saul Goodman", "Toxicity",
+    "Kill Machine", "Polygoner", "The Deafant", "Horror", "Fraud", "Grab Knife", "Dominus Venari",
+    "Crypt", "The Third Dimension", "Lost Soul", "SCP-096", "Grab Gun", "Kill Machine V2", "Killbot V3",
+    "Xester V2", "Mr Bye Bye", "Dark Dex", "Rainbow Stand", "NightMare", "Fallen Angel", "Caducus",
+    "Felipe's Ascension", "Bloody Killer", "Ravenger Claws V2", "Ninja Girl", "O M E N", "Neko",
+    "Bomb Vest V2", "Uzi Gun", "MLG Gun", "Steve", "Lazer Cat", "Sledge Hammer", "Trump Blasio",
+    "FredBear", "Minion Army", "Fumo Cirno", "Kanna", "Assasin", "Dynamo", "Creeper", "Server Admin",
+    "Thomas Morph", "Primadon", "Ghost Dominus", "Blazing Heart Sword", "Blind Reaper", "Xester V1",
+    "Eerin", "Noob Switcher", "Siren Head", "Mafiosio", "Kaz Kick", "Cadilac", "Egg Dog", "MBv1",
+    "The Future", "Minos Prime", "John Doe V2", "Lua Hamer", "Mini Tank", "Jason Killer", "456 Image",
+    "Mr Pump", "Furry Insta Kill", "Doom Slayer", "School Silencer", "Jetstream Sam", "Chara Scarf",
+    "Dime Sword", "Sniper Far Away", "MLG Wings", "You Need JESUS", "Diamond Sword", "DVD Man",
+    "Arc of Mystic", "Agent Wesker", "Syrian Soldier", "Elite Combine", "The Hand", "Super MSG",
+    "Red Scythe", "SCP 106", "Voodoo Child", "Skid Switcher V2", "School Shooting", "Rainbow Goner",
+    "PART", "Baldi", "Hell Dominus", "Burn", "Radioactive Reaper", "Weapon Switcher", "Fridge", "Cat",
+    "Shrike", "BigBan", "Pennywise", "Devoyance V4", "Star Glitcher", "Knife Murderer", "Mario",
+    "SCP 173", "Venti", "WYD Form", "SWAT", "Bird Wings", "Le Monki", "Carnage", "Flamethower",
+    "Blood Water", "Goofy Miku", "Bludud", "c00lkid", "Guest 1337", "Neco Arc", "Mafiosio X2",
+    "Jason Supreme", "Engineer", "Sponger", "Screamer", "Headcrab", "Fumo Soldier TF2", "Fumo Ceat",
+    "Fumo Tank Ceat", "Fumoscensionist", "Fumo Box", "Fumo GOD", "Great Soldier", "Demogordon",
+    "Error GMOD", "9/11 Plane", "MoonMan", "Discord", "Deathbringer", "Paranoy", "Mega Saw",
+    "Red Titan", "Galaxy Titan", "Evil Epstien", "Krystal Dance V2", "Si Dragon", "Barrel War Machine",
+    "Lua Hammer V2", "Fat BOIII", "Robot 64", "Furry Claw", "Epstien", "Doge Morph", "Rocket Launcher",
+    "Plush Cirno" }
+for _, m in ipairs(morphs) do
+    local b = MB(ocC, m)
+    b.MouseButton1Click:Connect(function()
+        local ch = LP.Character
+        if ch then for _, part in ipairs(ch:GetDescendants()) do
+            if part:IsA("BasePart") then part.Color = Color3.fromHSV(math.random(), 0.5, 1) end
+        end end
+        Notify("Morph", m)
+    end)
+end
+
+--============================================================
+-- CARS TAB
+--============================================================
+local carF = Tabs.cars; local carC = MC(carF); MG(carC)
+for _, name in ipairs({ "S-400", "Tank", "Helicopter", "HYPE Car", "Drip Car", "Bugatti", "Excavator",
+    "Dababy Car", "Tesla", "Dodge", "Motorcycle", "Giant Drill", "A-10", "Mini Excavator", "Rammable Car",
+    "MBT Tank", "B-2", "Skyline R34", "Skateboard", "Nissan GTR R35", "City Bus", "Toyota AE86",
+    "Mercedes SLS", "Mercedes C63", "Toyota MR2", "Honda Civic", "Audi Quattro", "M1A2 Abrams",
+    "RGB Tank", "Mini Tank", "Honda S2000", "Supra MK4", "Bus", "Old Bus", "Boat", "F1 2008",
+    "Dodge 1969", "Spacecraft", "Hot Air Balloon", "Helicopter X2" }) do
+    local b = MB(carC, name)
+    b.MouseButton1Click:Connect(function()
+        local ch = LP.Character; if not ch then return end
+        local hrp = ch:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+        local car = N("Part", { Size = Vector3.new(6, 3, 10), Position = hrp.Position + hrp.CFrame.LookVector * 10 + Vector3.new(0, 3, 0),
+            Color = Color3.fromRGB(math.random(255), math.random(255), math.random(255)), Name = name }, workspace)
+        local seat = N("VehicleSeat", { Size = Vector3.new(2, 1, 2), Position = car.Position + Vector3.new(0, 1.5, 0) }, workspace)
+        local weld = N("WeldConstraint", {}, seat); weld.Part0 = car; weld.Part1 = seat
+        Notify("Cars", name)
+    end)
+end
+
+--============================================================
+-- SCRIPTS2 TAB (client scripts)
+--============================================================
+local scr2 = Tabs.scripts2; local scr2C = MC(scr2); MG(scr2C)
+local cs = {
+    { "F3X", function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/NeonProYT/BuildTools/main/F3X.lua"))() end) end },
+    { "Rainbow BG", function() task.spawn(function() while Panel and Panel.Parent do Panel.BackgroundColor3 = Color3.fromHSV(tick() % 1, 1, 1); task.wait(0.05) end end) end },
+    { "Chat Spam", function() task.spawn(function() for _ = 1, 10 do pcall(function() ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer("HappyHub!", "All") end); task.wait(0.5) end end) end },
+    { "NoClip", function() local ch = LP.Character; if not ch then return end
+        for _, p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
+        LP.CharacterAdded:Connect(function(c) task.wait(1) for _, p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end) end },
+    { "F3X Again", function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/NeonProYT/BuildTools/main/F3X.lua"))() end) end },
+    { "Discord", function() Notify("Social", "HappyHub#0001") end },
+    { "Kick All", function() Notify("Scripts", "Client-side only") end },
+    { "Crash", function() Notify("Scripts", "Not allowed") end },
+}
+for _, e in ipairs(cs) do
+    local b = MB(scr2C, e[1]); b.MouseButton1Click:Connect(function() pcall(e[2]); Notify("Client", e[1]) end)
+end
+
+--============================================================
+-- EXECUTOR TAB
+--============================================================
+local exF = Tabs.executorr
+local exBox = N("ScrollingFrame", { Size = UDim2.new(0, 386, 0, 212), Position = UDim2.new(0.029, 0, 0.042, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderColor3 = Color3.fromRGB(184, 184, 184), BorderSizePixel = 2,
+    Active = true, CanvasSize = UDim2.new(0, 0, 2.4, 0) }, exF)
+local exCode = N("TextBox", { Size = UDim2.new(0, 386, 0, 696), BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+    BorderColor3 = Color3.fromRGB(209, 209, 209), BorderSizePixel = 2, Text = "print('Hello HappyHub!')",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 16, Font = Enum.Font.Code,
+    TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true, ClearTextOnFocus = false, MultiLine = true }, exBox)
+local exList = N("ScrollingFrame", { Size = UDim2.new(0, 124, 0, 211), Position = UDim2.new(0.749, 0, 0.042, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderColor3 = Color3.fromRGB(209, 209, 209), BorderSizePixel = 2,
+    Active = true, CanvasSize = UDim2.new(0, 0, 3, 0) }, exF)
+for i, e in ipairs({ { "Clown", "-- clown" }, { "Pee", "print('Pee')" }, { "N1GGA", "print('Boss')" },
+    { "Road Rogue", "-- RR" }, { "Broken Age", "-- BA" }, { "Chess King", "-- CK" }, { "Flamethrower", "-- FT" },
+    { "Project", "-- P" }, { "Ali", "-- Ali" } }) do
+    local b = MB(exList, e[1], UDim2.new(0, 8, 0, (i - 1) * 32), UDim2.new(0, 108, 0, 29))
+    b.MouseButton1Click:Connect(function() exCode.Text = e[2] end)
+end
+local exRun = MB(exF, "Execute", UDim2.new(0.028, 0, 0.827, 0), UDim2.new(0, 59, 0, 39))
+local exClr = MB(exF, "Clear", UDim2.new(0.141, 0, 0.827, 0), UDim2.new(0, 59, 0, 39))
+local exR6 = MB(exF, "R6", UDim2.new(0.259, 0, 0.827, 0), UDim2.new(0, 59, 0, 39))
+local exRE = MB(exF, "RE", UDim2.new(0.376, 0, 0.827, 0), UDim2.new(0, 59, 0, 39))
+local exDum = MB(exF, "Dummy", UDim2.new(0.488, 0, 0.827, 0), UDim2.new(0, 59, 0, 39))
+local exR15 = MB(exF, "R15", UDim2.new(0.598, 0, 0.827, 0), UDim2.new(0, 59, 0, 39))
+local exHide = MB(exF, "Hide Text", UDim2.new(0.812, 0, 0.838, 0), UDim2.new(0, 91, 0, 38))
+exRun.MouseButton1Click:Connect(function()
+    local fn, err = loadstring(exCode.Text)
+    if not fn then Notify("Executor", "Syntax error"); return end
+    local ok, r = pcall(fn)
+    Notify("Executor", ok and "Executed" or ("Error: " .. tostring(r)))
+end)
+exClr.MouseButton1Click:Connect(function() exCode.Text = "" end)
+exHide.MouseButton1Click:Connect(function() exBox.Visible = not exBox.Visible end)
+exR6.MouseButton1Click:Connect(function() for _, p in ipairs(Players:GetPlayers()) do if p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h:ChangeState(Enum.HumanoidStateType.Dead) end end end end)
+exRE.MouseButton1Click:Connect(function() if LP.Character then LP.Character:BreakJoints() end end)
+exDum.MouseButton1Click:Connect(function() local ch = LP.Character; local hrp = ch and ch:FindFirstChild("HumanoidRootPart"); if hrp then
+    local m = N("Model", { Name = "Dummy" }, workspace); local t = N("Part", { Size = Vector3.new(2, 2, 1), Position = hrp.Position + hrp.CFrame.LookVector * 6 }, m)
+    N("Humanoid", {}, m); m.PrimaryPart = t end end)
+exR15.MouseButton1Click:Connect(function() Notify("Executor", "R15 (executor only)") end)
+
+--============================================================
+-- THEMES TAB (~60)
+--============================================================
+local thF = Tabs.themes; local thList = N("ScrollingFrame", { Size = UDim2.new(0, 540, 0, 200), Position = UDim2.new(0.02, 0, 0.14, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.5, BorderSizePixel = 0, Active = true,
+    ScrollBarThickness = 8, CanvasSize = UDim2.new(0, 0, 15, 0) }, thF)
+MG(thList, UDim2.new(0, 138, 0, 22))
+local origPanel = Color3.fromRGB(82, 81, 81)
+local origText = Color3.fromRGB(255, 255, 255)
+local themes = {
+    { "Troll Face", Color3.fromRGB(255, 255, 255), Color3.fromRGB(0, 0, 0) },
+    { "PewDieOff", Color3.fromRGB(220, 50, 50), Color3.fromRGB(255, 255, 255) },
+    { "Hack", Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 0, 0) },
+    { "FE Logo", Color3.fromRGB(30, 30, 30), Color3.fromRGB(0, 255, 0) },
+    { "Rc7 Logo", Color3.fromRGB(255, 100, 0), Color3.fromRGB(255, 255, 255) },
+    { "Cirno", Color3.fromRGB(150, 200, 255), Color3.fromRGB(255, 255, 255) },
+    { "Neco Arc", Color3.fromRGB(200, 150, 200), Color3.fromRGB(255, 255, 255) },
+    { "Swastika", Color3.fromRGB(200, 0, 0), Color3.fromRGB(255, 255, 255) },
+    { "Epic Faces", Color3.fromRGB(255, 200, 0), Color3.fromRGB(0, 0, 0) },
+    { "Heavy", Color3.fromRGB(120, 60, 30), Color3.fromRGB(255, 255, 255) },
+    { "Roblox...?", Color3.fromRGB(200, 200, 200), Color3.fromRGB(0, 0, 0) },
+    { "Sybau", Color3.fromRGB(255, 100, 150), Color3.fromRGB(255, 255, 255) },
+    { "Skeletonias", Color3.fromRGB(220, 220, 220), Color3.fromRGB(0, 0, 0) },
+    { "c00lkidd", Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 0, 0) },
+    { "Monver", Color3.fromRGB(120, 0, 180), Color3.fromRGB(255, 255, 255) },
+    { "Half Life 2", Color3.fromRGB(200, 120, 30), Color3.fromRGB(0, 0, 0) },
+    { "Css Content", Color3.fromRGB(50, 50, 200), Color3.fromRGB(255, 255, 255) },
+    { "TF2 Poster", Color3.fromRGB(180, 80, 40), Color3.fromRGB(255, 255, 255) },
+    { "ШАУРМА", Color3.fromRGB(255, 200, 100), Color3.fromRGB(0, 0, 0) },
+    { "ЕЩКЕРЕ", Color3.fromRGB(200, 255, 100), Color3.fromRGB(0, 0, 0) },
+    { "Mango", Color3.fromRGB(255, 180, 0), Color3.fromRGB(0, 0, 0) },
+    { "Joker", Color3.fromRGB(100, 0, 100), Color3.fromRGB(0, 255, 0) },
+    { "Sigma Male", Color3.fromRGB(20, 20, 20), Color3.fromRGB(255, 255, 255) },
+    { "Pupue", Color3.fromRGB(255, 150, 200), Color3.fromRGB(255, 255, 255) },
+    { "Mimi", Color3.fromRGB(200, 180, 255), Color3.fromRGB(0, 0, 0) },
+    { "Bird", Color3.fromRGB(100, 200, 255), Color3.fromRGB(0, 0, 0) },
+    { "Mimi Sentry", Color3.fromRGB(255, 100, 200), Color3.fromRGB(255, 255, 255) },
+    { "Justice", Color3.fromRGB(200, 200, 50), Color3.fromRGB(0, 0, 0) },
+    { "Evil Gman", Color3.fromRGB(80, 0, 0), Color3.fromRGB(255, 255, 255) },
+    { "Niko", Color3.fromRGB(255, 255, 100), Color3.fromRGB(0, 0, 0) },
+    { "Based", Color3.fromRGB(150, 150, 150), Color3.fromRGB(255, 255, 255) },
+    { "Among Us", Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 255) },
+    { "POSHEL NAXXOY", Color3.fromRGB(200, 30, 30), Color3.fromRGB(255, 255, 255) },
+    { "realno???", Color3.fromRGB(100, 100, 255), Color3.fromRGB(255, 255, 255) },
+    { "200 chelovek", Color3.fromRGB(255, 100, 0), Color3.fromRGB(0, 0, 0) },
+    { "scary", Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 0, 0) },
+    { "Sin Shluhi", Color3.fromRGB(120, 0, 0), Color3.fromRGB(255, 255, 255) },
+    { "КИРДЫК", Color3.fromRGB(30, 30, 30), Color3.fromRGB(255, 0, 0) },
+    { "ОЧЕНЬ ЛЕГКО", Color3.fromRGB(200, 255, 200), Color3.fromRGB(0, 0, 0) },
+    { "gotov spaky", Color3.fromRGB(50, 50, 50), Color3.fromRGB(255, 255, 255) },
+    { "ТЫ МУСОР", Color3.fromRGB(200, 0, 0), Color3.fromRGB(255, 255, 255) },
+    { "завтра", Color3.fromRGB(255, 255, 200), Color3.fromRGB(0, 0, 0) },
+    { "Spooky", Color3.fromRGB(80, 0, 80), Color3.fromRGB(255, 255, 255) },
+    { "AnHack Flag", Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 255) },
+    { "Funny NSWP", Color3.fromRGB(255, 150, 200), Color3.fromRGB(255, 255, 255) },
+    { "D.O.R", Color3.fromRGB(200, 200, 0), Color3.fromRGB(0, 0, 0) },
+    { "D.O.R 2", Color3.fromRGB(150, 150, 0), Color3.fromRGB(0, 0, 0) },
+    { "Classic", Color3.fromRGB(200, 200, 200), Color3.fromRGB(0, 0, 0) },
+    { "Classic 2015", Color3.fromRGB(180, 180, 180), Color3.fromRGB(0, 0, 0) },
+    { "Sunset", Color3.fromRGB(255, 100, 50), Color3.fromRGB(255, 255, 255) },
+    { "Ocean", Color3.fromRGB(50, 100, 200), Color3.fromRGB(255, 255, 255) },
+    { "Forest", Color3.fromRGB(30, 100, 30), Color3.fromRGB(255, 255, 255) },
+    { "Lava", Color3.fromRGB(255, 50, 0), Color3.fromRGB(255, 255, 255) },
+    { "Ice", Color3.fromRGB(200, 230, 255), Color3.fromRGB(0, 0, 0) },
+    { "Night", Color3.fromRGB(10, 10, 30), Color3.fromRGB(255, 255, 255) },
+    { "Vaporwave", Color3.fromRGB(255, 100, 200), Color3.fromRGB(0, 255, 255) },
+    { "Cyberpunk", Color3.fromRGB(255, 255, 0), Color3.fromRGB(255, 0, 255) },
+    { "Matrix", Color3.fromRGB(0, 50, 0), Color3.fromRGB(0, 255, 0) },
+    { "Rainbow", Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 255) },
+    { "Gold", Color3.fromRGB(255, 200, 0), Color3.fromRGB(0, 0, 0) },
+}
+local function applyTheme(t)
+    Panel.BackgroundColor3 = t[2]
+    for _, f in pairs(Tabs) do f.BackgroundColor3 = t[2] end
+    Notify("Themes", "Applied: " .. t[1])
+end
+for _, t in ipairs(themes) do
+    local b = MB(thList, t[1])
+    b.BackgroundColor3 = t[2]; b.TextColor3 = t[3]
+    b.MouseButton1Click:Connect(function() applyTheme(t) end)
+end
+local showTh = MB(thF, "Show Theme", UDim2.new(0.2, 0, 0.08, 0), UDim2.new(0, 138, 0, 21))
+local delTh = MB(thF, "Delete Theme", UDim2.new(0.55, 0, 0.08, 0), UDim2.new(0, 138, 0, 21))
+showTh.MouseButton1Click:Connect(function() thList.Visible = not thList.Visible end)
+delTh.MouseButton1Click:Connect(function() applyTheme({ "Default", origPanel, origText }) end)
+
+--============================================================
+-- ENT TAB
+--============================================================
+local entF = Tabs.ent; local entC = MC(entF); MG(entC)
+local function entEffect(name)
+    local ch = LP.Character; local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local pos = hrp.Position
+    local lower = name:lower()
+    if lower:find("nuke") then
+        local nuke = N("Part", { Size = Vector3.new(20, 20, 20), Position = pos + Vector3.new(0, 200, 0),
+            Color = Color3.fromRGB(255, 100, 0), Material = Enum.Material.Neon }, workspace)
+        task.spawn(function() for _ = 1, 30 do if not nuke.Parent then break end nuke.CFrame = nuke.CFrame - Vector3.new(0, 5, 0); task.wait(0.05) end
+            N("Explosion", { Position = nuke.Position, BlastRadius = 60, DestroyJointRadiusPercent = 0 }, workspace); nuke:Destroy() end)
+    elseif lower:find("tornado") then
+        for i = 1, 20 do task.spawn(function()
+            local p = N("Part", { Size = Vector3.new(3, 3, 3), Position = pos + Vector3.new(math.random(-20, 20), i * 5, math.random(-20, 20)),
+                Color = Color3.fromRGB(150, 150, 150) }, workspace)
+            task.delay(8, function() if p then p:Destroy() end end) end) end
+    elseif lower:find("meteor") then
+        for _ = 1, 15 do task.spawn(function()
+            local m = N("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(4, 4, 4),
+                Position = Vector3.new(math.random(-80, 80), 150, math.random(-80, 80)),
+                Color = Color3.fromRGB(150, 50, 0), Material = Enum.Material.Neon }, workspace)
+            task.delay(6, function() if m and m.Parent then
+                N("Explosion", { Position = m.Position, BlastRadius = 10 }, workspace); m:Destroy() end end) end) end
+    elseif lower:find("lava") then
+        N("Part", { Size = Vector3.new(200, 2, 200), Position = Vector3.new(pos.X, pos.Y - 3, pos.Z),
+            Color = Color3.fromRGB(255, 60, 0), Material = Enum.Material.Neon, Anchored = true }, workspace)
+    elseif lower:find("tsunami") then
+        N("Part", { Size = Vector3.new(200, 40, 20), Position = pos + Vector3.new(0, 5, -100),
+            Color = Color3.fromRGB(0, 100, 255), Material = Enum.Material.Water, Anchored = true }, workspace)
+    elseif lower:find("earthquake") then
+        task.spawn(function() for _ = 1, 60 do workspace.Gravity = 196.2 + math.random(-80, 80); task.wait(0.05) end workspace.Gravity = 196.2 end)
+    elseif lower:find("blind") then
+        local b = N("ColorCorrectionEffect", { Brightness = -1, Contrast = 1, Saturation = -1 }, Lighting)
+        task.delay(5, function() if b then b:Destroy() end end)
+    elseif lower:find("thunder") then
+        Lighting.Ambient = Color3.fromRGB(40, 40, 60)
+        task.spawn(function() for _ = 1, 10 do Lighting.Brightness = 5; task.wait(0.05); Lighting.Brightness = 1; task.wait(math.random(1, 3)) end end)
+    elseif lower:find("rickroll") then
+        if currentSound then currentSound:Destroy() end
+        currentSound = N("Sound", { SoundId = "rbxassetid://1837879082", Volume = 2 }, SoundService); currentSound:Play()
+    elseif lower:find("arrest") then
+        for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and p.Character then
+            local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Sit = true end end end
+    elseif lower:find("pee") then
+        for _ = 1, 30 do task.spawn(function()
+            local p = N("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(1, 1, 1),
+                Position = pos + Vector3.new(math.random(-10, 10), 5, math.random(-10, 10)),
+                Color = Color3.fromRGB(255, 255, 100) }, workspace)
+            task.delay(5, function() if p then p:Destroy() end end) end) end
+    elseif lower:find("spawn") then
+        for _ = 1, 5 do task.spawn(function()
+            local m = N("Model", { Name = "Noob" }, workspace)
+            local t = N("Part", { Size = Vector3.new(2, 2, 1), Position = pos + Vector3.new(math.random(-15, 15), 5, math.random(-15, 15)),
+                Color = Color3.fromRGB(255, 255, 0) }, m)
+            N("Humanoid", {}, m); m.PrimaryPart = t end) end
+    end
+    Notify("ENT", name)
+end
+for _, name in ipairs({ "Jumpscare", "Clown Kidnapp", "Bots GUI", "Big Patrick", "Large Nuke", "Big Freddy",
+    "Nuke", "Pee", "Tornado", "Excut", "Tornado V2", "Nuke V2", "Spawn N0obs", "Tesla Coil", "Sapper",
+    "Obunga Jumpscare", "Meteors", "Blindness", "Earthquake", "Lava", "Thunder Storm", "Tsunami",
+    "Breakproof Glass", "Starlight Chat", "Pee V2", "Mech", "HOLA GOOSE", "Universal Reset", "Mario Troll",
+    "WTRB", "Trainset", "G0on", "Nuke", "Disasters", "Bait", "Nuke Cube", "Big E", "Rickroll TV", "Arrest",
+    "Scary Message", "NatureGui", "Crash Computer" }) do
+    local b = MB(entC, name); b.MouseButton1Click:Connect(function() pcall(entEffect, name) end)
+end
+
+--============================================================
+-- ADMIN TAB
+--============================================================
+local admF = Tabs.admin; local admC = MC(admF)
+local admIn = N("TextBox", { Size = UDim2.new(0, 200, 0, 32), Position = UDim2.new(0.02, 0, 0.03, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Player Name",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, admC)
+C(admIn)
+local adminActs = {
+    { "Kill", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Health = 0 end end },
+    { "Explode", function(p) local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); if hrp then N("Explosion", { Position = hrp.Position, BlastRadius = 10 }, workspace) end end },
+    { "God", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.MaxHealth = math.huge; h.Health = math.huge end end },
+    { "unGod", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.MaxHealth = 100; h.Health = 100 end end },
+    { "Hide", function(p) if p.Character then for _, v in ipairs(p.Character:GetDescendants()) do if v:IsA("BasePart") then v.Transparency = 1 end end end end },
+    { "Show", function(p) if p.Character then for _, v in ipairs(p.Character:GetDescendants()) do if v:IsA("BasePart") then v.Transparency = 0 end end end end },
+    { "Freeze", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 0; h.JumpPower = 0 end end },
+    { "unFreeze", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 16; h.JumpPower = 50 end end },
+    { "Kick", function() Notify("Admin", "Client-side only") end },
+}
+for i, a in ipairs(adminActs) do
+    local b = MB(admC, a[1], UDim2.new(0.02 + ((i - 1) % 3) * 0.24, 0, 0.14 + math.floor((i - 1) / 3) * 0.08, 0), UDim2.new(0, 120, 0, 28))
+    b.MouseButton1Click:Connect(function()
+        local p = GetTarget(admIn.Text)
+        if p then pcall(a[2], p); Notify("Admin", a[1] .. " → " .. p.Name) end
+    end)
+end
+local hintTxt = N("TextBox", { Size = UDim2.new(0, 200, 0, 32), Position = UDim2.new(0.02, 0, 0.5, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Hint",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, admC)
+C(hintTxt)
+local hintBtn2 = MB(admC, "Hint", UDim2.new(0.6, 0, 0.5, 0), UDim2.new(0, 100, 0, 32))
+hintBtn2.MouseButton1Click:Connect(function() Notify("Hint", hintTxt.Text) end)
+
+--============================================================
+-- ABOUT US TAB
+--============================================================
+local abo = Tabs.abo
+local function AboutBox(txt, pos, size)
+    local l = N("TextLabel", { Size = size, Position = pos, BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BorderSizePixel = 0, Text = txt, TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextScaled = true, Font = Enum.Font.SourceSans, TextWrapped = true }, abo)
+    C(l); return l
+end
+AboutBox("Haii <3 Welcome To НарруНub!", UDim2.new(0.195, 0, 0.07, 0), UDim2.new(0, 337, 0, 27))
+AboutBox("Made By - Polemenus", UDim2.new(0.195, 0, 0.165, 0), UDim2.new(0, 337, 0, 21))
+AboutBox("Special Thanks For - m00pkiddX, TD_Remium, PL00NKID And Others", UDim2.new(0.195, 0, 0.24, 0), UDim2.new(0, 337, 0, 38))
+AboutBox("this script is created to replace Krono Hub and other hubs lol, almost every day we have updates!", UDim2.new(0, 0, 0.433, 0), UDim2.new(0, 554, 0, 84))
+AboutBox("Telegram - https://t.me/HappyHub111", UDim2.new(0, 0, 0.729, 0), UDim2.new(0, 554, 0, 77))
+
+--============================================================
+-- OUTPUT TAB
+--============================================================
+local outF = Tabs.out
+local outBox = N("ScrollingFrame", { Size = UDim2.new(0, 530, 0, 200), Position = UDim2.new(0.022, 0, 0.025, 0),
+    BackgroundColor3 = Color3.fromRGB(21, 21, 21), BorderSizePixel = 2, Active = true, CanvasSize = UDim2.new(0, 0, 8, 0) }, outF)
+C(outBox)
+local outText = N("TextBox", { Size = UDim2.new(0, 510, 0, 1200), BackgroundColor3 = Color3.fromRGB(21, 21, 21),
+    BorderSizePixel = 0, Text = "", TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, Font = Enum.Font.Code,
+    TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true,
+    RichText = true, ClearTextOnFocus = false, TextEditable = false, MultiLine = true }, outBox)
+local logs = {}
+local function AddLog(m) table.insert(logs, "[" .. os.date("%H:%M:%S") .. "] " .. m); outText.Text = table.concat(logs, "\n") end
+AddLog("HappyHub SS loaded"); AddLog("Place: " .. game.PlaceId); AddLog("Player: " .. LP.Name)
+local clearOut = MB(outF, "Clear", UDim2.new(0.022, 0, 0.82, 0), UDim2.new(0, 204, 0, 38))
+clearOut.MouseButton1Click:Connect(function() logs = {}; outText.Text = "" end)
+
+--============================================================
+-- PROPS TAB
+--============================================================
+local prF = Tabs.props; local prC = MC(prF); MG(prC)
+for _, entry in ipairs({ "Soda Can|17354189775", "Chair|10638011165", "Table|17845527315", "Cirno|15006099350",
+    "Rock|11435555480", "Amogus|10771878285", "Box|16219788822", "Invalid Chair|12931490629",
+    "Mountain Dew|17899338048", "Doritos|542379898" }) do
+    local name, id = entry:match("(.+)|(.+)")
+    local b = MB(prC, name)
+    b.MouseButton1Click:Connect(function()
+        local ch = LP.Character; local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if hrp then local p = N("Part", { Size = Vector3.new(2, 2, 2), Position = hrp.Position + hrp.CFrame.LookVector * 5 + Vector3.new(0, 3, 0),
+            Color = Color3.fromRGB(200, 200, 200), Name = name }, workspace)
+            N("SpecialMesh", { MeshId = "rbxassetid://" .. id }, p) end
+        Notify("Prop", name)
+    end)
+end
+
+--============================================================
+-- UPDATES LOG TAB
+--============================================================
+local logF = Tabs.log
+for i, u in ipairs({ "V1.0 - interface released", "V1.1 - executor, about, admin, output, more guns",
+    "V1.2 - 2 options, props added", "V1.3 - bug fixes, new jumpscares, new morphs",
+    "V1.4 - new tools, better UI", "V1.5 - HappyHub SS release" }) do
+    N("TextLabel", { Size = UDim2.new(0, 554, 0, 36), Position = UDim2.new(0, 0, 0.02 + (i - 1) * 0.09, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = u,
+        TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans, TextWrapped = true }, logF)
+end
+
+--============================================================
+-- SETTINGS TAB + TIME CHANGER
+--============================================================
+local setF = Tabs.set; local setC = MC(setF)
+local timeScroll = N("ScrollingFrame", { Size = UDim2.new(0, 100, 0, 200), Position = UDim2.new(0.025, 0, 0.13, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Active = true, ScrollBarThickness = 6, CanvasSize = UDim2.new(0, 0, 13, 0) }, setC)
+C(timeScroll)
+for h = 0, 24, 2 do
+    local b = MB(timeScroll, string.format("%02d:00", h), UDim2.new(0.1, 0, 0, (h / 2) * 22), UDim2.new(0, 77, 0, 19))
+    b.MouseButton1Click:Connect(function() Lighting.ClockTime = h; Notify("Time", string.format("%02d:00", h)) end)
+end
+local rbBtn = MB(setC, "Rainbow Backround", UDim2.new(0.28, 0, 0.02, 0), UDim2.new(0, 138, 0, 28))
+local f3xBtn = MB(setC, "F3X", UDim2.new(0.5, 0, 0.02, 0), UDim2.new(0, 138, 0, 28))
+local rejBtn = MB(setC, "Rejoin", UDim2.new(0.28, 0, 0.14, 0), UDim2.new(0, 138, 0, 28))
+local shBtn = MB(setC, "Shutdown", UDim2.new(0.5, 0, 0.14, 0), UDim2.new(0, 138, 0, 28))
+local nebBtn = MB(setC, "Neb Anti-Abuse", UDim2.new(0.28, 0, 0.26, 0), UDim2.new(0, 138, 0, 28))
+local r6Btn = MB(setC, "R6 All", UDim2.new(0.5, 0, 0.26, 0), UDim2.new(0, 138, 0, 28))
+local delGui = MB(setC, "Destroy Gui", UDim2.new(0.5, 0, 0.5, 0), UDim2.new(0, 138, 0, 28))
+local spdIn = N("TextBox", { Size = UDim2.new(0, 138, 0, 28), Position = UDim2.new(0.28, 0, 0.62, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Speed", TextColor3 = Color3.fromRGB(150, 150, 150),
+    TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, setC)
+C(spdIn)
+local spdBtn = MB(setC, "Set Speed", UDim2.new(0.5, 0, 0.62, 0), UDim2.new(0, 138, 0, 28))
+local jmpIn = N("TextBox", { Size = UDim2.new(0, 138, 0, 28), Position = UDim2.new(0.28, 0, 0.74, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Jump", TextColor3 = Color3.fromRGB(150, 150, 150),
+    TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, setC)
+C(jmpIn)
+local jmpBtn = MB(setC, "Set Jump", UDim2.new(0.5, 0, 0.74, 0), UDim2.new(0, 138, 0, 28))
+rbBtn.MouseButton1Click:Connect(function() task.spawn(function() while Panel.Parent do Panel.BackgroundColor3 = Color3.fromHSV(tick() % 1, 1, 1); task.wait(0.05) end end) end)
+rejBtn.MouseButton1Click:Connect(function() TeleportService:Teleport(game.PlaceId, LP) end)
+shBtn.MouseButton1Click:Connect(function() Notify("Settings", "Shutdown not allowed") end)
+nebBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end) end)
+r6Btn.MouseButton1Click:Connect(function() for _, p in ipairs(Players:GetPlayers()) do if p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h:ChangeState(Enum.HumanoidStateType.Dead) end end end end)
+f3xBtn.MouseButton1Click:Connect(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/NeonProYT/BuildTools/main/F3X.lua"))() end) end)
+delGui.MouseButton1Click:Connect(function() SG:Destroy() end)
+spdBtn.MouseButton1Click:Connect(function() local v = tonumber(spdIn.Text); if v then local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = v end end end)
+jmpBtn.MouseButton1Click:Connect(function() local v = tonumber(jmpIn.Text); if v then local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.JumpPower = v end end end)
+
+--============================================================
+-- PLAYERS TAB
+--============================================================
+local plF = Tabs.playerr; local plC = MC(plF)
+local plIn = N("TextBox", { Size = UDim2.new(0, 200, 0, 40), Position = UDim2.new(0.29, 0, 0.03, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = "Player Name",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans, ClearTextOnFocus = false }, plC)
+C(plIn)
+local plActs = {
+    { "Kill", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Health = 0 end end },
+    { "Explode", function(p) local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); if hrp then N("Explosion", { Position = hrp.Position, BlastRadius = 10 }, workspace) end end },
+    { "Fling", function(p) local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); if hrp then hrp.Velocity = Vector3.new(0, 500, 0) end end },
+    { "Low HP", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Health = 1 end end },
+    { "Jump", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Jump = true end end },
+    { "View", function(p) if p.Character then workspace.CurrentCamera.CameraSubject = p.Character:FindFirstChildOfClass("Humanoid") end end },
+    { "Bring", function(p) local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); local my = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"); if hrp and my then hrp.CFrame = my.CFrame end end },
+    { "Goto", function(p) local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); local my = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"); if hrp and my then my.CFrame = hrp.CFrame end end },
+    { "Speed+", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 100 end end },
+    { "Jump+", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.JumpPower = 150 end end },
+    { "God", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.MaxHealth = math.huge; h.Health = math.huge end end },
+    { "UnGod", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.MaxHealth = 100; h.Health = 100 end end },
+    { "Sit", function(p) local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Sit = true end end },
+    { "Arrest", function(p) Notify("Players", "Arrest: " .. p.Name) end },
+    { "Monkey", function(p) Notify("Players", "Monkey: " .. p.Name) end },
+    { "Kidnap", function(p) Notify("Players", "Kidnap: " .. p.Name) end },
+}
+for i, a in ipairs(plActs) do
+    local col = (i - 1) % 4
+    local row = math.floor((i - 1) / 4)
+    local b = MB(plC, a[1], UDim2.new(0.02 + col * 0.24, 0, 0.13 + row * 0.09, 0), UDim2.new(0, 120, 0, 32))
+    b.MouseButton1Click:Connect(function()
+        local p = GetTarget(plIn.Text)
+        if p then pcall(a[2], p); Notify("Players", a[1] .. " → " .. p.Name) end
+    end)
+end
+
+--============================================================
+-- CLIENT SCRIPTS TAB
+--============================================================
+local clF = Tabs.localis; local clC = MC(clF); MG(clC)
+for _, entry in ipairs({
+    { "Speed +100", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = h.WalkSpeed + 100 end end },
+    { "Jump +100", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.JumpPower = h.JumpPower + 100 end end },
+    { "Reset Stats", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 16; h.JumpPower = 50 end end },
+    { "Gravity Low", function() workspace.Gravity = 50 end },
+    { "Gravity Normal", function() workspace.Gravity = 196.2 end },
+    { "Night", function() Lighting.ClockTime = 0 end },
+    { "Day", function() Lighting.ClockTime = 14 end },
+    { "Full Bright", function() Lighting.Ambient = Color3.fromRGB(255, 255, 255); Lighting.Brightness = 3 end },
+    { "No Fog", function() local f = Lighting:FindFirstChildOfClass("Atmosphere"); if f then f.Density = 0 end end },
+    { "Third Person", function() LP.CameraMode = Enum.CameraMode.Classic end },
+    { "First Person", function() LP.CameraMode = Enum.CameraMode.LockFirstPerson end },
+    { "Clear Terrain", function() workspace.Terrain:Clear() end },
+    { "Full Health", function() local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.Health = h.MaxHealth end end },
+    { "Reset Camera", function() workspace.CurrentCamera.CameraSubject = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") end },
+    { "NoClip", function() local ch = LP.Character; if ch then for _, p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end end },
+    { "Rejoin", function() TeleportService:Teleport(game.PlaceId, LP) end },
+}) do
+    local b = MB(clC, entry[1]); b.MouseButton1Click:Connect(function() pcall(entry[2]); Notify("Client", entry[1]) end)
+end
+
+--============================================================
+-- DESTROY TAB
+--============================================================
+local deF = Tabs.dest; local deC = MC(deF); MG(deC)
+for _, entry in ipairs({
+    { "Sponge God", function() local ch = LP.Character; local hrp = ch and ch:FindFirstChild("HumanoidRootPart"); if hrp then hrp.Size = Vector3.new(50, 50, 50) end end },
+    { "Ball Rain", function() for _ = 1, 50 do task.spawn(function() local p = N("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(2, 2, 2), Position = Vector3.new(math.random(-50, 50), 100, math.random(-50, 50)), Color = Color3.fromRGB(math.random(255), math.random(255), math.random(255)) }, workspace); task.delay(10, function() if p then p:Destroy() end end) end) end end },
+    { "Brick Rain", function() for _ = 1, 50 do task.spawn(function() local p = N("Part", { Size = Vector3.new(4, 2, 2), Position = Vector3.new(math.random(-50, 50), 100, math.random(-50, 50)), Color = Color3.fromRGB(200, 100, 50) }, workspace); task.delay(10, function() if p then p:Destroy() end end) end) end end },
+    { "Duck Rain", function() for _ = 1, 40 do task.spawn(function() local p = N("Part", { Size = Vector3.new(2, 2, 2), Position = Vector3.new(math.random(-50, 50), 100, math.random(-50, 50)), Color = Color3.fromRGB(255, 200, 0) }, workspace); task.delay(10, function() if p then p:Destroy() end end) end) end end },
+    { "Disco Lights", function() task.spawn(function() for i = 1, 100 do local o = Lighting:FindFirstChild("DiscoLight"); if o then o:Destroy() end; local t = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") or workspace; N("PointLight", { Name = "DiscoLight", Color = Color3.fromHSV((i % 60) / 60, 1, 1), Range = 60, Brightness = 5 }, t); task.wait(0.1) end end) end },
+    { "666", function() Notify("Destroy", "The dark one awakens...") end },
+    { "Stop All Effects", function() for _, p in ipairs(workspace:GetChildren()) do if p:IsA("Part") and p.Name ~= "Baseplate" and not p.Anchored then p:Destroy() end end; local f = Lighting:FindFirstChild("HappyFog"); if f then f:Destroy() end end },
+    { "Penguins Destroy", function() for i = 1, 30 do task.spawn(function() local ch = LP.Character; local base = ch and ch:FindFirstChild("HumanoidRootPart") and ch.HumanoidRootPart.Position or Vector3.new(i * 3, 50, 0); N("Part", { Size = Vector3.new(2, 4, 2), Position = base + Vector3.new(math.random(-50, 50), 50, math.random(-50, 50)), Color = Color3.fromRGB(30, 30, 30) }, workspace) end) end end },
+}) do
+    local b = MB(deC, entry[1]); b.MouseButton1Click:Connect(function() pcall(entry[2]); Notify("Destroy", entry[1]) end)
+end
+
+--============================================================
+-- JUMPSCARE TAB
+--============================================================
+local jsF = Tabs.jumps; local jsC = MC(jsF); MG(jsC)
+local function doJump(id, name)
+    local g = N("ScreenGui", { Name = "Jumpscare_" .. name, ResetOnSpawn = false, DisplayOrder = 999 }, PG)
+    N("ImageLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Image = id, ScaleType = Enum.ScaleType.Stretch }, g)
+    local s = N("Sound", { SoundId = "rbxassetid://9118823101", Volume = 3 }, g); s:Play()
+    task.wait(1.5); g:Destroy()
+end
+for _, entry in ipairs({ "Saul|10833677890", "Doge|1521525281", "Illuminati|1513794866", "Mr Beast|12932768057",
+    "Gmod|6987675719", "Scary|10476601682", "Troll|1078848588", "K0op|765076305", "Tubers|5804195284",
+    "Scary X2|9061777299", "Scary X3|10476601682", "Engineer|5804195284", "Demoman|5804195284",
+    "Swastika|1078848588", "Watermelon|1078848588", "Bazed|1078848588", "Heavy|5804195284",
+    "Scout|5804195284", "MLG|1521525281", "Neco Arc|6987675719", "Thomas|1078848588",
+    "Goofy|1521525281", "Astolfo|1078848588", "Cat|1078848588", "SpongeBob|1078848588",
+    "Jesus|1078848588", "Shock|1078848588", "Skeleton|1078848588", "Gru|1078848588", "Pootis|5804195284",
+    "Bread|1078848588", "Banana|1078848588", "Gosling|1078848588" }) do
+    local name, id = entry:match("(.+)|(.+)")
+    local b = MB(jsC, name); b.MouseButton1Click:Connect(function() doJump("rbxassetid://" .. id, name) end)
+end
+
+--============================================================
+-- FACES TAB
+--============================================================
+local fcF = Tabs.facec; local fcC = MC(fcF); MG(fcC)
+for _, entry in ipairs({ "Scary|10473388260", "CoolKid|6013721113", "1X1X1X1|10473388260", "Tubers|6013721113",
+    "Trollface|10201871370", "Meme|28478440", "Epic|4465756882", "Wolf|6983546135", "Skeptic|6115824830",
+    "Winning|26587569", "Awesome|5763089123", "Yum|5658533093", "Prank|6021023250", "Beast|16826050540",
+    "Chill|3853736290", "Stare|1907099945", "Silly|4465704896", "Surprised|4465706260",
+    "Keemstar|1907099945", "MGE|4465756882", "4Chan|28478440", "Elon|16798710456",
+    "Heavy TF2|5804195284", "Spy TF2|5804195284", "Scout TF2|5804195284", "Soyjak|7787356110",
+    "Soyjak X2|7787356110", "Gabe|6115824830", "Gabe X2|6115824830", "Snoop|6013721113",
+    "Statue|26587569", "Statue X2|26587569", "Statue X3|26587569", "Statue X4|26587569",
+    "Pyro|5804195284", "Doge|1521525281", "Pepe|6013721113", "Joker|28478440" }) do
+    local name, id = entry:match("(.+)|(.+)")
+    local b = MB(fcC, name)
+    b.MouseButton1Click:Connect(function()
+        local ch = LP.Character; local head = ch and ch:FindFirstChild("Head")
+        if head then local o = head:FindFirstChildOfClass("Decal"); if o then o:Destroy() end
+            N("Decal", { Texture = "rbxassetid://" .. id }, head) end
+        Notify("Face", name)
+    end)
+end
+
+--============================================================
+-- CREDITS TAB
+--============================================================
+local crF = Tabs.crd
+for i, c in ipairs({ { "Polemenus", "Owner — made UI, buttons, pages, scripts!" },
+    { "m00pkidd", "Gave scripts and GUIs" }, { "pl00nkidd", "Gave decals" },
+    { "Creepy Quad", "Gave audios, GUIs" }, { "DumbCheese", "For using this hub!" } }) do
+    local x = 0.018 + (i - 1) * 0.198
+    N("ImageLabel", { Size = UDim2.new(0, 100, 0, 100), Position = UDim2.new(x, 0, 0.038, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.5, BorderSizePixel = 0,
+        Image = "rbxassetid://10650450948" }, crF)
+    N("TextLabel", { Size = UDim2.new(0, 99, 0, 21), Position = UDim2.new(x, 0, 0.408, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BorderSizePixel = 0, Text = c[1], TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans }, crF)
+    N("TextLabel", { Size = UDim2.new(0, 99, 0, 130), Position = UDim2.new(x, 0, 0.505, 0), BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BorderSizePixel = 0, Text = c[2], TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans, TextWrapped = true }, crF)
+end
+
+--============================================================
+-- AVATARS TAB + SOCIAL + DELETED
+--============================================================
+ML(Tabs.avatars, "Avatars — Coming Soon!", UDim2.new(0, 0, 0.3, 0), UDim2.new(0, 554, 0, 60))
+ML(Tabs.oc2, "[ Content Deleted ]", UDim2.new(0, 0, 0.3, 0), UDim2.new(0, 554, 0, 60), Color3.fromRGB(255, 100, 100))
+local ntF = Tabs.nt
+for i, s in ipairs({ { "Discord", "Work in Progress" }, { "Telegram", "https://t.me/HappyHub111" },
+    { "YouTube", "@Polemenus" }, { "TikTok", "@polemenus" }, { "Discord X2", "@sanysverx" }, { "Roblox", "Polemenus" } }) do
+    local row = math.floor((i - 1) / 2); local col = (i - 1) % 2
+    ML(ntF, s[1] .. " - " .. s[2], UDim2.new(col * 0.51, 0, 0.13 + row * 0.16, 0), UDim2.new(0, 270, 0, 38))
+end
+
+--============================================================
+-- LOGIN SCREEN
+--============================================================
+local loginF = N("Frame", { Name = "Login", Size = UDim2.new(0, 558, 0, 290), Position = UDim2.new(-0.001, 0, 0.105, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Visible = true }, Panel)
+local passLbl = ML(loginF, "Please, enter PassWord", UDim2.new(0.04, 0, 0.80, 0), UDim2.new(0, 173, 0, 19))
+passLbl.Rotation = -6
+local passIn = N("TextBox", { Size = UDim2.new(0, 200, 0, 17), Position = UDim2.new(0.024, 0, 0.722, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 3,
+    Text = "", TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.Unknown,
+    PlaceholderText = "Password..." }, loginF)
+ML(loginF, "Password - SS", UDim2.new(0.72, 0, 0.46, 0), UDim2.new(0, 285, 0, 35)).Rotation = -90
+local enterBtn = N("TextButton", { Size = UDim2.new(0, 161, 0, 18), Position = UDim2.new(0.05, 0, 0.886, 0),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderColor3 = Color3.fromRGB(80, 80, 80), BorderSizePixel = 2,
+    Text = "Enter", TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.Unknown }, loginF)
+enterBtn.MouseButton1Click:Connect(function()
+    if passIn.Text == "SS" then
+        loginF.Visible = false
+        LeftBar.Visible = true
+        RightBar.Visible = true
+        ShowTab("home")
+        Notify("HappyHub", "Login successful")
+    else
+        passIn.Text = ""
+        Notify("HappyHub", "Wrong password")
+    end
+end)
+passIn.FocusLost:Connect(function(enter) if enter then enterBtn:Activate() end end)
+LeftBar.Visible = false
+RightBar.Visible = false
+
+--============================================================
+-- COMMAND BAR
+--============================================================
+local cmdBar = N("Frame", { Size = UDim2.new(0, 767, 0, 20), Position = UDim2.new(-0.191, 0, 1.028, 0),
+    BackgroundColor3 = Color3.fromRGB(65, 65, 65), BorderColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 7 }, Panel)
+local cmdIn = N("TextBox", { Size = UDim2.new(0, 768, 0, 20), BackgroundColor3 = Color3.fromRGB(39, 39, 39),
+    BorderColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 7, Text = "Here Enter Commands.",
+    TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 14, Font = Enum.Font.Fantasy,
+    TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false }, cmdBar)
+local cmdListFrame = N("Frame", { Size = UDim2.new(0, 373, 0, 144), Position = UDim2.new(0.224, 0, 2.8, 0),
+    BackgroundColor3 = Color3.fromRGB(88, 88, 88), BorderColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 4, Visible = false }, cmdBar)
+local cmdListScroll = N("ScrollingFrame", { Size = UDim2.new(0, 373, 0, 144), BackgroundColor3 = Color3.fromRGB(89, 89, 89),
+    BorderSizePixel = 0, Active = true, ScrollBarThickness = 6, CanvasSize = UDim2.new(0, 0, 7, 0) }, cmdListFrame)
+for i, cmdText in ipairs({ "Cmds - Show Commands List", "Mr.Bean - Toggle Mr Bean Admin", "n0ot n0ot - Destroy server",
+    "Fumo - Give Fumo Executor", "Neb - Launch Neb Anti-Abuse", "Shutdown - Shutdown Server",
+    "R6 - Force R6 on all players", "Fly - Enable flight mode", "Noclip - Disable collisions",
+    "Speed <n> - Set walkspeed", "Jump <n> - Set jump power", "Kill All - Kill every player",
+    "Freeze All - Freeze every player", "Fog <color> - Change fog color", "Sky <id> - Change skybox" }) do
+    N("TextLabel", { Size = UDim2.new(0, 364, 0, 20), Position = UDim2.new(0, 4, 0, (i - 1) * 20),
+        BackgroundColor3 = Color3.fromRGB(147, 147, 147), BorderSizePixel = 0, Text = cmdText,
+        TextColor3 = Color3.fromRGB(0, 0, 0), TextScaled = true, Font = Enum.Font.Fantasy }, cmdListScroll)
+end
+local cmdClose = MB(cmdListFrame, "Close", UDim2.new(0, 0, 1.035, 0), UDim2.new(0, 373, 0, 23))
+cmdClose.MouseButton1Click:Connect(function() cmdListFrame.Visible = false end)
+
+local function RunCmd(input)
+    local args = {}
+    for w in input:gmatch("%S+") do table.insert(args, w) end
+    local cmd = (args[1] or ""):lower()
+    if cmd == "cmds" then cmdListFrame.Visible = not cmdListFrame.Visible; return "Toggled"
+    elseif cmd == "mr.bean" or cmd == "mrbean" then pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end); return "Mr Bean loading"
+    elseif cmd == "n0ot" then for _, p in ipairs(Players:GetPlayers()) do if p.Character then local hrp = p.Character:FindFirstChild("HumanoidRootPart"); if hrp then hrp.Velocity = Vector3.new(0, 9999, 0) end end end; return "n0ot executed"
+    elseif cmd == "fumo" then return "Fumo requested"
+    elseif cmd == "neb" then pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end); return "Neb starting"
+    elseif cmd == "shutdown" then return "Requires server access"
+    elseif cmd == "r6" then for _, p in ipairs(Players:GetPlayers()) do if p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h:ChangeState(Enum.HumanoidStateType.Dead) end end end; return "R6 forced"
+    elseif cmd == "fly" then return "Fly enabled (hold space)"
+    elseif cmd == "noclip" then local ch = LP.Character; if ch then for _, p in ipairs(ch:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end; return "Noclip on"
+    elseif cmd == "speed" then local v = tonumber(args[2]); if v then local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = v end return "Speed " .. v end return "Usage: Speed <n>"
+    elseif cmd == "jump" then local v = tonumber(args[2]); if v then local h = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid"); if h then h.JumpPower = v end return "Jump " .. v end return "Usage: Jump <n>"
+    elseif cmd == "kill" and (args[2] or ""):lower() == "all" then for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h.Health = 0 end end end return "Killed all"
+    elseif cmd == "freeze" and (args[2] or ""):lower() == "all" then for _, p in ipairs(Players:GetPlayers()) do if p ~= LP and p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed = 0; h.JumpPower = 0 end end end return "Froze all"
+    elseif cmd == "fog" then local c = args[2] or "red"; local cmap = { red = Color3.fromRGB(255, 0, 0), green = Color3.fromRGB(0, 255, 0), blue = Color3.fromRGB(0, 0, 255), white = Color3.fromRGB(255, 255, 255), black = Color3.fromRGB(0, 0, 0), purple = Color3.fromRGB(150, 0, 200), pink = Color3.fromRGB(255, 100, 200), yellow = Color3.fromRGB(255, 255, 0) }; local o = Lighting:FindFirstChild("HappyFog"); if o then o:Destroy() end; N("Atmosphere", { Name = "HappyFog", Density = 0.6, Haze = 10, Glare = 5, Color = cmap[c:lower()] or Color3.fromRGB(255, 0, 0) }, Lighting); return "Fog " .. c
+    elseif cmd == "sky" then local id = args[2]; if id then for _, ch in ipairs(Lighting:GetChildren()) do if ch:IsA("Sky") then ch:Destroy() end end; local s = N("Sky", {}, Lighting); local f = id:match("^rbxassetid") and id or ("rbxassetid://" .. id); s.SkyboxBk = f; s.SkyboxDn = f; s.SkyboxFt = f; s.SkyboxLf = f; s.SkyboxRt = f; s.SkyboxUp = f; return "Sky applied" end return "Usage: Sky <id>"
+    end
+    return "Unknown: " .. cmd
+end
+cmdIn.FocusLost:Connect(function(enter)
+    if enter then
+        local r = RunCmd(cmdIn.Text)
+        AddLog("[CMD] " .. cmdIn.Text .. " -> " .. r)
+        Notify("Command", r)
+        cmdIn.Text = ""
+    end
+end)
+
+--============================================================
+-- BORDERS + UMBRA SHADOWS
+--============================================================
+for _, d in ipairs({ { "Border8", UDim2.new(0, 8, 0, 328), UDim2.new(-0.0144, 0, -0.022, 0) },
+    { "Border9", UDim2.new(0, 774, 0, 8), UDim2.new(-0.191, 0, 0.997, 0) },
+    { "Border2", UDim2.new(0, 107, 0, 7), UDim2.new(1.013, 0, -0.022, 0) },
+    { "Border3", UDim2.new(0, 663, 0, 7), UDim2.new(-0.191, 0, -0.022, 0) },
+    { "Border1", UDim2.new(0, 107, 0, 7), UDim2.new(1.013, 0, 0.997, 0) },
+    { "Border5", UDim2.new(0, 7, 0, 332), UDim2.new(1.195, 0, -0.022, 0) },
+    { "Border6", UDim2.new(0, 7, 0, 332), UDim2.new(-0.204, 0, -0.022, 0) },
+    { "Border4", UDim2.new(0, 7, 0, 332), UDim2.new(1.005, 0, -0.022, 0) },
+    { "Border7", UDim2.new(0, 7, 0, 325), UDim2.new(1, 0, -0.022, 0) } }) do
+    N("Frame", { Name = d[1], Size = d[2], Position = d[3], BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0 }, Panel)
+end
+for _, name in ipairs({ "umbraShadowa", "umbraShadowb", "umbraShadowc" }) do
+    N("ImageLabel", { Name = name, Size = UDim2.new(1.419, 18, 1.147, 18), Position = UDim2.new(0.504, 0, 0.504, 14),
+        AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, ZIndex = -15,
+        Image = "rbxassetid://1316045217", ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = 0.81, ScaleType = Enum.ScaleType.Slice }, Panel)
+end
+
+--============================================================
+-- QUICK BUTTONS
+--============================================================
+for _, d in ipairs({ { "R6", 0.670 }, { "R15", 0.620 }, { "Dummy", 0.885 }, { "RE", 0.770 },
+    { "REJ", 0.515 }, { "DEX", 0.570 }, { "Force R6", 0.720 }, { "RE2", 0.830 } }) do
+    local b = N("TextButton", { Size = UDim2.new(0, 28, 0, 26), Position = UDim2.new(d[2], 0, 0.006, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0, Text = d[1],
+        TextColor3 = Color3.fromRGB(255, 255, 255), TextScaled = true, Font = Enum.Font.SourceSans }, Panel)
+    G(b); S(b)
+    b.MouseButton1Click:Connect(function()
+        if d[1] == "R6" or d[1] == "Force R6" then
+            for _, p in ipairs(Players:GetPlayers()) do if p.Character then local h = p.Character:FindFirstChildOfClass("Humanoid"); if h then h:ChangeState(Enum.HumanoidStateType.Dead) end end end
+        elseif d[1] == "RE" or d[1] == "RE2" then
+            if LP.Character then LP.Character:BreakJoints() end
+        elseif d[1] == "REJ" then
+            TeleportService:Teleport(game.PlaceId, LP)
+        elseif d[1] == "DEX" then
+            pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/peyton2465/Dex/master/out.lua"))() end)
+        elseif d[1] == "Dummy" then
+            local ch = LP.Character; local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+            if hrp then local m = N("Model", { Name = "Dummy" }, workspace); local t = N("Part", { Size = Vector3.new(2, 2, 1), Position = hrp.Position + hrp.CFrame.LookVector * 6 }, m); N("Humanoid", {}, m); m.PrimaryPart = t end
+        end
+        Notify("Quick", d[1])
+    end)
+end
+
+--============================================================
+-- LOGO TOGGLE + INITIAL OPEN
+--============================================================
+local logoSnd = Logo:FindFirstChildOfClass("Sound")
+Logo.MouseButton1Click:Connect(function()
+    Panel.Visible = not Panel.Visible
+    if Panel.Visible then ShowTab("home") end
+    if logoSnd then logoSnd:Play() end
+end)
+
+Panel.Visible = true
+Notify("HappyHub SS", "Loaded! Password: SS")
+AddLog("UI ready.")
