@@ -1,0 +1,1231 @@
+-- HappyHub SS - Original Design Layout
+-- Universal executor compatible
+
+local _task = task
+if not _task or not _task.wait then
+	_task = {wait = wait, spawn = spawn, delay = delay or function(t, f) wait(t) f() end}
+end
+local _setClip = setclipboard or set_clipboard or toclipboard or writeclipboard or (syn and syn.set_clipboard) or (function() end)
+local _exec = "Unknown"
+pcall(function()
+	if identifyexecutor then _exec = identifyexecutor()
+	elseif getexecutorname then _exec = getexecutorname()
+	elseif syn then _exec = "Synapse"
+	elseif KRNL_LOADED then _exec = "KRNL" end
+end)
+
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
+local Run = game:GetService("RunService")
+local Tween = game:GetService("TweenService")
+local Light = game:GetService("Lighting")
+local HTTP = game:GetService("HttpService")
+local TP = game:GetService("TeleportService")
+local Debris = game:GetService("Debris")
+local GuiSvc = game:GetService("GuiService")
+
+local LP = Players.LocalPlayer
+local PG = LP:WaitForChild("PlayerGui")
+local Cam = workspace.CurrentCamera
+
+for _, v in pairs(PG:GetChildren()) do
+	if v.Name == "po" or v.Name == "HappyHub" then
+		pcall(function() v:Destroy() end)
+	end
+end
+
+local function safe(class, props, parent)
+	local ok, obj = pcall(Instance.new, class)
+	if not ok or not obj then return nil end
+	if props then
+		for k, v in pairs(props) do
+			pcall(function() obj[k] = v end)
+		end
+	end
+	if parent then
+		pcall(function() obj.Parent = parent end)
+	end
+	return obj
+end
+
+local function corner(p, r)
+	if not p then return end
+	return safe("UICorner", {CornerRadius = UDim.new(0, r or 0)}, p)
+end
+
+local Accent = Color3.fromRGB(140, 0, 255)
+local Black = Color3.fromRGB(0, 0, 0)
+
+-- ============ SCREEN GUI "po" ============
+local ScreenGui = safe("ScreenGui", {
+	Name = "po",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	DisplayOrder = 999
+}, PG)
+pcall(function() ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling end)
+
+-- ============ "main" ScreenGui (child of po) ============
+local mainGui = safe("ScreenGui", {
+	Name = "main",
+	ResetOnSpawn = false
+}, ScreenGui)
+
+-- Notifications disabled
+local function notify(text)
+	-- removed
+end
+
+local function playClick()
+	pcall(function()
+		local s = safe("Sound", {SoundId = "rbxassetid://1673280232", Volume = 0.3}, ScreenGui)
+		if s then s:Play() Debris:AddItem(s, 1) end
+	end)
+end
+
+-- ============ LOGO (cube, not circle) ============
+local logoFrame = safe("Frame", {
+	Name = "logo",
+	Size = UDim2.new(0, 33, 0, 15),
+	Position = UDim2.new(0.008245876990258694, 0, 0.3624161183834076, 0),
+	BackgroundColor3 = Black,
+	BorderColor3 = Black,
+	BorderSizePixel = 0
+}, mainGui)
+
+local logoBtn = safe("ImageButton", {
+	Size = UDim2.new(0, 43, 0, 43),
+	Position = UDim2.new(-0.023, 0, -0.7, 0),
+	BackgroundColor3 = Black,
+	BorderColor3 = Black,
+	BorderSizePixel = 0,
+	ClipsDescendants = true,
+	Image = "http://www.roblox.com/asset/?id=18853838370",
+	AutoButtonColor = false
+}, logoFrame)
+corner(logoBtn, 0)
+
+-- ============ "icon" ScreenGui with troll ImageLabel ============
+local iconGui = safe("ScreenGui", {Name = "icon", ResetOnSpawn = false}, mainGui)
+safe("ImageLabel", {
+	Size = UDim2.new(0, 99, 0, 99),
+	Position = UDim2.new(0, 0, 0.8610000014305115, 0),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Visible = false,
+	Active = true,
+	Image = "http://www.roblox.com/asset/?id=132442703885001",
+	Name = "troll"
+}, iconGui)
+
+-- ============ MAIN WINDOW "kabum" ============
+local kabum = safe("Frame", {
+	Name = "kabum",
+	Size = UDim2.new(0, 554, 0, 318),
+	Position = UDim2.new(0.2282475084066391, 0, 0.2594819664955139, 0),
+	BackgroundColor3 = Color3.fromRGB(82, 81, 81),
+	BackgroundTransparency = 0.5,
+	BorderColor3 = Black,
+	BorderSizePixel = 7,
+	Visible = false,
+	Active = true
+}, mainGui)
+
+-- ============ TITLE ============
+local titleLabel = safe("TextLabel", {
+	Name = "title",
+	Size = UDim2.new(0, 217, 0, 34),
+	Position = UDim2.new(0, 0, 0, 0),
+	BackgroundColor3 = Black,
+	BorderColor3 = Black,
+	BorderSizePixel = 0,
+	Text = "    HappyHub SS",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextSize = 14,
+	Font = Enum.Font.Fantasy,
+	TextScaled = true,
+	TextWrapped = true
+}, kabum)
+
+local fpsLabel = safe("TextLabel", {
+	Size = UDim2.new(0, 48, 0, 18),
+	Position = UDim2.new(1.022047519683838, 0, 0.44117647409439087, 0),
+	BackgroundColor3 = Black,
+	BorderSizePixel = 0,
+	Text = "FPS: 38",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextSize = 14,
+	Font = Enum.Font.SourceSans,
+	TextScaled = true,
+	TextWrapped = true
+}, titleLabel)
+
+local pingLabel = safe("TextLabel", {
+	Size = UDim2.new(0, 49, 0, 16),
+	Position = UDim2.new(1.022047519683838, 0, 0, 0),
+	BackgroundColor3 = Black,
+	BorderSizePixel = 0,
+	Text = "Ping: 113 ms",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextSize = 14,
+	Font = Enum.Font.SourceSans,
+	TextScaled = true,
+	TextWrapped = true
+}, titleLabel)
+
+_task.spawn(function()
+	while ScreenGui.Parent do
+		local ok1, fps = pcall(function() return math.floor(1 / Run.RenderStepped:Wait()) end)
+		if not ok1 then fps = 60 end
+		local ok2, ping = pcall(function() return math.floor(LP:GetNetworkPing() * 1000) end)
+		if not ok2 then ping = 0 end
+		pcall(function()
+			fpsLabel.Text = "FPS: " .. fps
+			pingLabel.Text = "Ping: " .. ping .. " ms"
+		end)
+	end
+end)
+
+-- ============ TITLE BUTTONS ============
+local function titleBtn(text, posX, posY)
+	return safe("TextButton", {
+		Size = UDim2.new(0, 28, 0, 26),
+		Position = UDim2.new(posX, 0, posY, 0),
+		BackgroundColor3 = Black,
+		BorderColor3 = Black,
+		BorderSizePixel = 0,
+		Text = text,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Font = Enum.Font.SourceSans,
+		TextScaled = true,
+		TextWrapped = true
+	}, kabum)
+end
+
+local rejBtn  = titleBtn("REJ",   0.5149244070053101, 0.006289307959377766)
+local dexBtn  = titleBtn("DEX",   0.5699999928474426, 0.006000000052154064)
+local r6Btn   = titleBtn("R6",    0.6700000166893005, 0.006000000052154064)
+local reBtn   = titleBtn("RE",    0.7699999809265137, 0.006000000052154064)
+local dummyBtn= titleBtn("Dummy", 0.8849999904632568, 0.006000000052154064)
+
+-- ============ EXIT BUTTON ============
+local exitBtn = safe("TextButton", {
+	Name = "exit",
+	Size = UDim2.new(0, 30, 0, 30),
+	Position = UDim2.new(0.9373070001602173, 0, 0, 0),
+	BackgroundColor3 = Black,
+	BorderColor3 = Color3.new(1, 1, 1),
+	BorderSizePixel = 0,
+	Text = "X",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextSize = 14,
+	Font = Enum.Font.SourceSansBold,
+	TextScaled = true,
+	TextWrapped = true
+}, kabum)
+corner(exitBtn, 0)
+exitBtn.MouseButton1Click:Connect(function()
+	kabum.Visible = false
+end)
+
+-- ============ BORDERS ============
+local borderDefs = {
+	{Name="Border8", Size=UDim2.new(0, 8, 0, 328),   Pos=UDim2.new(-0.014440433122217655, 0, -0.022012578323483467, 0)},
+	{Name="Border9", Size=UDim2.new(0, 774, 0, 8),   Pos=UDim2.new(-0.19133585691452026, 0, 0.9968553185462952, 0)},
+	{Name="Border2", Size=UDim2.new(0, 107, 0, 7),   Pos=UDim2.new(1.012635350227356, 0, -0.022012578323483467, 0)},
+	{Name="Border3", Size=UDim2.new(0, 663, 0, 7),   Pos=UDim2.new(-0.1913357377052307, 0, -0.022012578323483467, 0)},
+	{Name="Border1", Size=UDim2.new(0, 107, 0, 7),   Pos=UDim2.new(1.013, 0, 0.997, 0)},
+	{Name="Border5", Size=UDim2.new(0, 7, 0, 332),   Pos=UDim2.new(1.195, 0, -0.022, 0)},
+	{Name="Border6", Size=UDim2.new(0, 7, 0, 332),   Pos=UDim2.new(-0.20397111773490906, 0, -0.022012578323483467, 0)},
+	{Name="Border4", Size=UDim2.new(0, 7, 0, 332),   Pos=UDim2.new(1.0054152011871338, 0, -0.022012578323483467, 0)},
+	{Name="Border7", Size=UDim2.new(0, 7, 0, 325),   Pos=UDim2.new(1, 0, -0.022012578323483467, 0)},
+}
+for _, b in ipairs(borderDefs) do
+	safe("Frame", {
+		Name = b.Name, Size = b.Size, Position = b.Pos,
+		BackgroundColor3 = Black, BorderSizePixel = 0
+	}, kabum)
+end
+
+-- ============ PAGES ============
+local Pages = {}
+local function createPage(name)
+	local p = safe("Frame", {
+		Name = name,
+		Size = UDim2.new(0, 553, 0, 284),
+		Position = UDim2.new(0, 0, 0.10691819339990616, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 1
+	}, kabum)
+	safe("UIGridLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		CellPadding = UDim2.new(0, 6, 0, 4),
+		CellSize = UDim2.new(0.48, 0, 0, 26)
+	}, p)
+	safe("UIPadding", {PaddingTop = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6)}, p)
+	Pages[name] = p
+	return p
+end
+
+local function showPage(name)
+	for _, p in pairs(Pages) do p.Visible = false end
+	if Pages[name] then Pages[name].Visible = true end
+end
+
+local function makeBtn(page, text, fn)
+	local btn = safe("TextButton", {
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundColor3 = Black,
+		BorderSizePixel = 0,
+		Text = text,
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.SourceSans,
+		TextSize = 12,
+		TextScaled = true
+	}, page)
+	corner(btn, 0)
+	btn.MouseEnter:Connect(function()
+		pcall(function() Tween:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = Accent}):Play() end)
+	end)
+	btn.MouseLeave:Connect(function()
+		pcall(function() Tween:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = Black}):Play() end)
+	end)
+	btn.MouseButton1Click:Connect(function()
+		playClick()
+		local ok, err = pcall(fn)
+		if not ok then warn("HappyHub err: " .. tostring(err)) end
+	end)
+	return btn
+end
+
+local function makeBox(page, ph)
+	local box = safe("TextBox", {
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundColor3 = Black,
+		PlaceholderText = ph,
+		Text = "",
+		TextColor3 = Color3.new(1, 1, 1),
+		Font = Enum.Font.SourceSans,
+		TextSize = 12,
+		ClearTextOnFocus = false
+	}, page)
+	corner(box, 0)
+	return box
+end
+
+-- ============ CHARACTER HELPERS ============
+local function getChar() return LP.Character or LP.CharacterAdded:Wait() end
+local function getHum() local c = getChar() return c and c:FindFirstChildOfClass("Humanoid") end
+local function getHRP() local c = getChar() return c and c:FindFirstChild("HumanoidRootPart") end
+
+local function setSpeed(n) local h = getHum() if h then h.WalkSpeed = n end end
+local function setJump(n) local h = getHum() if h then h.JumpPower = n h.UseJumpPower = true end end
+local function rejoin() pcall(function() TP:Teleport(game.PlaceId, LP) end) end
+local function serverHop()
+	pcall(function()
+		local data = HTTP:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100"))
+		for _, s in ipairs(data.data) do
+			if s.playing < s.maxPlayers and s.id ~= game.JobId then
+				TP:TeleportToPlaceInstance(game.PlaceId, s.id, LP); return
+			end
+		end
+	end)
+end
+
+local function jumpscare(id)
+	pcall(function()
+		local img = safe("ImageLabel", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Image = "rbxassetid://" .. id, ZIndex = 200}, ScreenGui)
+		local snd = safe("Sound", {SoundId = "rbxassetid://18755588842", Volume = 3}, ScreenGui)
+		snd:Play()
+		_task.delay(1.2, function() pcall(function() img:Destroy() snd:Destroy() end) end)
+	end)
+end
+
+local flying, flyBV, flyBG
+local function toggleFly()
+	flying = not flying
+	if flying then
+		local hrp = getHRP(); if not hrp then return end
+		flyBV = safe("BodyVelocity", {MaxForce = Vector3.new(1e5, 1e5, 1e5), Velocity = Vector3.new()}, hrp)
+		flyBG = safe("BodyGyro", {MaxTorque = Vector3.new(1e5, 1e5, 1e5), P = 1000, CFrame = hrp.CFrame}, hrp)
+	else
+		if flyBV then flyBV:Destroy() end
+		if flyBG then flyBG:Destroy() end
+	end
+end
+Run.RenderStepped:Connect(function()
+	if flying and flyBV and flyBG then
+		local cf = Cam.CFrame
+		local m = Vector3.new()
+		if UIS:IsKeyDown(Enum.KeyCode.W) then m = m + cf.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.S) then m = m - cf.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.A) then m = m - cf.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.D) then m = m + cf.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.Space) then m = m + Vector3.new(0, 1, 0) end
+		if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then m = m - Vector3.new(0, 1, 0) end
+		flyBV.Velocity = m * 60
+		flyBG.CFrame = cf
+	end
+end)
+
+local function spawnDummy()
+	local hrp = getHRP(); if not hrp then return end
+	local d = safe("Model", {Name = "HappyHub_Dummy"}, workspace)
+	local base = hrp.CFrame * CFrame.new(0, 0, -6)
+	local parts = {}
+	for _, x in ipairs({
+		{"HumanoidRootPart", Vector3.new(2,2,1), Vector3.new(0,0,0), true},
+		{"Torso", Vector3.new(2,2,1), Vector3.new(0,0,0)},
+		{"Head", Vector3.new(2,1,1), Vector3.new(0,1.5,0)},
+		{"Left Arm", Vector3.new(1,2,1), Vector3.new(-1.5,0,0)},
+		{"Right Arm", Vector3.new(1,2,1), Vector3.new(1.5,0,0)},
+		{"Left Leg", Vector3.new(1,2,1), Vector3.new(-0.5,-2,0)},
+		{"Right Leg", Vector3.new(1,2,1), Vector3.new(0.5,-2,0)}
+	}) do
+		local p = safe("Part", {Name = x[1], Size = x[2], CFrame = base * CFrame.new(x[3]), Anchored = x[4] or false, BrickColor = BrickColor.new("Really blue")}, d)
+		if x[1] == "Head" then
+			safe("SpecialMesh", {Scale = Vector3.new(1.25, 1.25, 1.25)}, p)
+			safe("Decal", {Name = "Face"}, p)
+		end
+		if x[1] == "HumanoidRootPart" then p.Transparency = 0.5 end
+		table.insert(parts, p)
+	end
+	safe("Humanoid", {}, d)
+	for _, p in ipairs(parts) do
+		if p.Name ~= "HumanoidRootPart" then
+			local w = safe("WeldConstraint", {}, p)
+			w.Part0 = parts[1] w.Part1 = p
+		end
+	end
+end
+
+local function openDEX()
+	pcall(function()
+		local dex = safe("ScreenGui", {Name = "HappyDEX", ResetOnSpawn = false}, PG)
+		local f = safe("Frame", {Size = UDim2.new(0, 420, 0, 320), Position = UDim2.new(0.5, -210, 0.5, -160), BackgroundColor3 = Color3.fromRGB(20, 20, 20)}, dex)
+		corner(f, 0)
+		safe("TextLabel", {Size = UDim2.new(1, 0, 0, 24), BackgroundColor3 = Black, Text = "  HappyDEX", TextColor3 = Accent, Font = Enum.Font.SourceSansBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left}, f)
+		local cb = safe("TextButton", {Size = UDim2.new(0, 28, 0, 20), Position = UDim2.new(1, -32, 0, 2), BackgroundColor3 = Color3.fromRGB(200, 40, 40), Text = "X", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.SourceSansBold}, f)
+		corner(cb, 0)
+		cb.MouseButton1Click:Connect(function() dex:Destroy() end)
+		local sc = safe("ScrollingFrame", {Size = UDim2.new(1, -8, 1, -32), Position = UDim2.new(0, 4, 0, 28), BackgroundColor3 = Black, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, 0)}, f)
+		pcall(function() sc.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+		safe("UIListLayout", {Padding = UDim.new(0, 2)}, sc)
+		local function add(parent, name, depth)
+			local x = safe("TextButton", {Size = UDim2.new(1, 0, 0, 18), BackgroundColor3 = Black, Text = string.rep("  ", depth) .. "> " .. name, TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.Code, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left}, sc)
+			corner(x, 0)
+			x.MouseButton1Click:Connect(function()
+				for _, c in ipairs(x:GetChildren()) do
+					if c:IsA("TextButton") then c:Destroy() end
+				end
+				if parent then
+					for _, c in ipairs(parent:GetChildren()) do
+						if c.Name ~= name then add(c, c.Name, depth + 1) end
+					end
+				end
+			end)
+		end
+		for _, c in ipairs(game:GetChildren()) do add(c, c.Name, 0) end
+	end)
+end
+
+local function forceR6()
+	pcall(function()
+		local c = getChar()
+		for _, v in pairs(c:GetDescendants()) do
+			if v:IsA("BasePart") then v:BreakJoints() end
+		end
+		c:ClearAllChildren()
+		LP.CharacterAutoLoads = false
+		local newChar = Players:CreateHumanoidModelFromUserId(LP.UserId)
+		newChar.Name = LP.Name
+		newChar.Parent = workspace
+		LP.Character = newChar
+	end)
+end
+
+local function god() local h = getHum() if h then h.MaxHealth = math.huge h.Health = math.huge end end
+local function ungod() local h = getHum() if h then h.MaxHealth = 100 h.Health = 100 end end
+local function heal() local h = getHum() if h then h.Health = h.MaxHealth end end
+local function invis() for _, v in pairs(getChar():GetDescendants()) do if v:IsA("BasePart") then v.Transparency = 1 end end end
+local function vis() for _, v in pairs(getChar():GetDescendants()) do if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then v.Transparency = 0 end end end
+local function clearParticles() local hrp = getHRP(); if not hrp then return end for _, v in pairs(hrp:GetChildren()) do if v:IsA("ParticleEmitter") or v:IsA("Attachment") then v:Destroy() end end end
+local function addParticle(id, rate)
+	local hrp = getHRP(); if not hrp then return end
+	local att = safe("Attachment", {}, hrp)
+	safe("ParticleEmitter", {Texture = "rbxassetid://" .. id, Rate = rate or 50, Lifetime = NumberRange.new(1, 2), Speed = NumberRange.new(5, 15), SpreadAngle = Vector2.new(180, 180)}, att)
+	_task.delay(8, function() pcall(function() att:Destroy() end) end)
+end
+local function playMusic(id) if _G.__music then _G.__music:Destroy() end _G.__music = safe("Sound", {SoundId = "rbxassetid://" .. id, Volume = 0.5}, workspace) _G.__music:Play() end
+local function stopMusic() if _G.__music then _G.__music:Destroy() _G.__music = nil end end
+
+local function makeMelee(name, size, color, dmg)
+	local c = getChar()
+	local tool = safe("Tool", {Name = name, RequiresHandle = true}, c)
+	local handle = safe("Part", {Name = "Handle", Size = size, BrickColor = BrickColor.new(color), CanCollide = false}, tool)
+	tool.GripPos = Vector3.new(0, -1, 0)
+	tool.Activated:Connect(function()
+		local hrp = getHRP(); if not hrp then return end
+		local s = safe("Sound", {SoundId = "rbxassetid://12222216", Volume = 1}, handle) s:Play() Debris:AddItem(s, 1)
+		local hit = safe("Part", {Size = Vector3.new(4, 4, 4), CFrame = hrp.CFrame * CFrame.new(0, 0, -4), Transparency = 1, CanCollide = false, Name = "HH_Hit"}, workspace)
+		Debris:AddItem(hit, 0.1)
+		hit.Touched:Connect(function(o)
+			local m = o.Parent:FindFirstChildOfClass("Humanoid")
+			if m and o.Parent ~= c then m:TakeDamage(dmg or 25) end
+		end)
+	end)
+end
+
+local function makeGun(name, size, color, dmg)
+	local c = getChar()
+	local tool = safe("Tool", {Name = name}, c)
+	local handle = safe("Part", {Name = "Handle", Size = size, BrickColor = BrickColor.new(color), CanCollide = false}, tool)
+	tool.GripPos = Vector3.new(0, -0.5, -1)
+	tool.Activated:Connect(function()
+		local hrp = getHRP(); if not hrp then return end
+		local s = safe("Sound", {SoundId = "rbxassetid://1113117129", Volume = 1}, handle) s:Play() Debris:AddItem(s, 1)
+		local ray = Ray.new(handle.Position, Cam.CFrame.LookVector * 500)
+		local hit, pos = workspace:FindPartOnRay(ray, c)
+		if hit then
+			local m = hit.Parent:FindFirstChildOfClass("Humanoid")
+			if m and hit.Parent ~= c then m:TakeDamage(dmg or 35) end
+			safe("Explosion", {Position = pos, BlastRadius = 1, BlastPressure = 0, DestroyJointRadiusPercent = 0}, workspace)
+		end
+	end)
+end
+
+local function morphName(name)
+	pcall(function()
+		local uid = Players:GetUserIdFromNameAsync(name)
+		local c = getChar()
+		local new = Players:CreateHumanoidModelFromUserId(uid)
+		new.Name = LP.Name
+		local hrp = getHRP(); if not hrp then return end
+		new:SetPrimaryPartCFrame(hrp.CFrame)
+		new.Parent = workspace
+		c:Destroy()
+		LP.Character = new
+	end)
+end
+
+local function spawnNPC(name, uid)
+	local hrp = getHRP(); if not hrp then return end
+	local new = Players:CreateHumanoidModelFromUserId(uid or 1)
+	new.Name = name or "NPC"
+	new:SetPrimaryPartCFrame(hrp.CFrame * CFrame.new(0, 0, -6))
+	new.Parent = workspace
+end
+
+local function setFace(id)
+	local head = getChar():FindFirstChild("Head")
+	if head then
+		local f = head:FindFirstChild("face")
+		if f then f:Destroy() end
+		safe("Decal", {Name = "face", Texture = "rbxassetid://" .. id}, head)
+	end
+end
+
+local function sendChat(m)
+	pcall(function()
+		RS:FindFirstChild("DefaultChatSystemChatEvents"):FindFirstChild("SayMessageRequest"):FireServer(m, "All")
+	end)
+end
+
+-- ============ LEFT SIDEBAR (opt) ============
+local leftSidebar = safe("ScrollingFrame", {
+	Name = "opt",
+	Size = UDim2.new(0, 97, 0, 318),
+	Position = UDim2.new(-0.18953068554401398, 0, 0, 0),
+	BackgroundColor3 = Color3.fromRGB(44, 44, 44),
+	BackgroundTransparency = 0.5,
+	BorderColor3 = Black,
+	BorderSizePixel = 7,
+	Active = true,
+	ScrollBarThickness = 4,
+	CanvasSize = UDim2.new(0, 0, 0, 0)
+}, kabum)
+pcall(function() leftSidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+safe("UIListLayout", {Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder}, leftSidebar)
+safe("UIPadding", {PaddingTop = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6)}, leftSidebar)
+
+-- ============ RIGHT SIDEBAR (opt2) ============
+local rightSidebar = safe("ScrollingFrame", {
+	Name = "opt2",
+	Size = UDim2.new(0, 97, 0, 318),
+	Position = UDim2.new(1.0198556184768677, 0, 0, 0),
+	BackgroundColor3 = Color3.fromRGB(44, 44, 44),
+	BackgroundTransparency = 0.5,
+	BorderColor3 = Black,
+	BorderSizePixel = 7,
+	Active = true,
+	ScrollBarThickness = 4,
+	CanvasSize = UDim2.new(0, 0, 0, 0)
+}, kabum)
+pcall(function() rightSidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+safe("UIListLayout", {Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder}, rightSidebar)
+safe("UIPadding", {PaddingTop = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6)}, rightSidebar)
+
+local function sideBtn(parent, text, pageName)
+	local btn = safe("TextButton", {
+		Size = UDim2.new(0, 67, 0, 26),
+		BackgroundColor3 = Black,
+		BorderColor3 = Black,
+		BorderSizePixel = 0,
+		Text = text,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 14,
+		Font = Enum.Font.SourceSans,
+		TextScaled = true,
+		TextWrapped = true
+	}, parent)
+	corner(btn, 0)
+	btn.MouseEnter:Connect(function()
+		pcall(function() Tween:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = Accent}):Play() end)
+	end)
+	btn.MouseLeave:Connect(function()
+		pcall(function() Tween:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = Black}):Play() end)
+	end)
+	btn.MouseButton1Click:Connect(function()
+		playClick()
+		showPage(pageName)
+	end)
+	return btn
+end
+
+-- ============ COMMAND BAR ============
+local cmdFrame = safe("Frame", {
+	Size = UDim2.new(0, 767, 0, 20),
+	Position = UDim2.new(-0.1909998208284378, 0, 1.027999997138977, 0),
+	BackgroundColor3 = Color3.fromRGB(65, 65, 65),
+	BorderColor3 = Black,
+	BorderSizePixel = 7
+}, kabum)
+
+local cmdInput = safe("TextBox", {
+	Name = "InputCmd",
+	Size = UDim2.new(0, 768, 0, 20),
+	Position = UDim2.new(-0.0002427082508802414, 0, 0, 0),
+	BackgroundColor3 = Color3.fromRGB(39, 39, 39),
+	BorderColor3 = Black,
+	BorderSizePixel = 7,
+	Text = "Here Enter Commands.",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextSize = 31,
+	Font = Enum.Font.Fantasy,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextWrapped = true,
+	ClearTextOnFocus = false
+}, cmdFrame)
+
+-- ============ CREATE ALL PAGES ============
+local pageNames = {
+	"home", "sky", "decals", "songs", "maps", "hm", "sh",
+	"particles", "oc", "ToOOLS", "NpC", "ENT", "cars",
+	"executorr", "scripts", "abo", "admin", "out",
+	"localis", "dest", "playerr", "set", "jumps",
+	"crd", "facec", "Avatars", "nt", "props", "log"
+}
+for _, n in ipairs(pageNames) do createPage(n) end
+
+-- ============ PAGE CONTENT ============
+-- Home
+makeBtn(Pages.home, "Rejoin Server", rejoin)
+makeBtn(Pages.home, "Server Hop", serverHop)
+makeBtn(Pages.home, "Copy Username", function() _setClip(LP.Name) end)
+makeBtn(Pages.home, "Copy User ID", function() _setClip(tostring(LP.UserId)) end)
+makeBtn(Pages.home, "Copy Game ID", function() _setClip(tostring(game.PlaceId)) end)
+makeBtn(Pages.home, "Time: " .. os.date("%H:%M:%S"), function() end)
+makeBtn(Pages.home, "Server Uptime", function() end)
+makeBtn(Pages.home, "Player Count", function() end)
+makeBtn(Pages.home, "Respawn", function() LP:LoadCharacter() end)
+makeBtn(Pages.home, "Executor: " .. _exec, function() end)
+
+-- Sky
+for _, s in ipairs({
+	{"Default", 0}, {"Scary", 6094534237}, {"Spooky", 5959124543}, {"Night", 6053412593},
+	{"Space", 1443207172}, {"Galaxy", 1443207172}, {"Sunset", 6043596755}, {"Moon", 5819564380},
+	{"Rainbow", 1443207172}, {"USA", 1443207172}, {"China", 1443207172}, {"Japan", 1443207172}
+}) do
+	makeBtn(Pages.sky, s[1] .. " Sky", function()
+		local ex = Light:FindFirstChildOfClass("Sky")
+		if ex then ex:Destroy() end
+		if s[2] ~= 0 then
+			local n = Instance.new("Sky", Light)
+			local a = "rbxassetid://" .. s[2]
+			n.SkyboxBk = a n.SkyboxDn = a n.SkyboxFt = a n.SkyboxLf = a n.SkyboxRt = a n.SkyboxUp = a
+		end
+	end)
+end
+
+-- Decals
+for _, d in ipairs({"Scary Decals", "CoolKid Decals", "1X1X1X1 Decals", "Tubers Decals", "Thomas Decals", "Smile Decals", "FNAF Decals", "Anime Decals", "MLG Decals", "Snoop Decals"}) do
+	makeBtn(Pages.decals, d, function() end)
+end
+makeBtn(Pages.decals, "Remove All Faces", function()
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl.Character then
+			local head = pl.Character:FindFirstChild("Head")
+			if head then local f = head:FindFirstChild("face") if f then f:Destroy() end end
+		end
+	end
+end)
+
+-- Songs
+makeBtn(Pages.songs, "Stop", stopMusic)
+for _, s in ipairs({
+	{"Spooky Scary", 5319099321}, {"Trollolo", 1837879082}, {"Gangsta", 5474798005},
+	{"Chaos", 1836133087}, {"Nyan Cat", 142376088}, {"Never Gonna", 1848354536},
+	{"Among Us", 6851568842}, {"Megalovania", 3335420856}, {"Billie Jean", 1840002628},
+	{"Thriller", 1843865512}, {"Despacito", 1849015110}, {"Sunflower", 1850687328}
+}) do
+	makeBtn(Pages.songs, s[1], function() playMusic(tostring(s[2])) end)
+end
+local songBox = makeBox(Pages.songs, "Song ID")
+makeBtn(Pages.songs, "Play Custom", function() if songBox.Text ~= "" then playMusic(songBox.Text) end end)
+
+-- Maps
+for _, m in ipairs({
+	{"Baseplate", CFrame.new(0, 10, 0)}, {"Backrooms", CFrame.new(0, 500, 0)},
+	{"Ohio", CFrame.new(500, 10, 500)}, {"Crossroads", CFrame.new(200, 10, 200)},
+	{"FNAF", CFrame.new(-200, 10, -200)}, {"Space", CFrame.new(0, 5000, 0)},
+	{"Moon", CFrame.new(0, 10000, 0)}, {"Underwater", CFrame.new(0, -500, 0)},
+	{"KFC", CFrame.new(-100, 10, -100)}, {"McDonalds", CFrame.new(300, 10, -300)},
+	{"Roblox HQ", CFrame.new(-500, 10, 500)}, {"Prison Life", CFrame.new(2500, 10, 0)},
+	{"de_dust2", CFrame.new(-3000, 10, 0)}, {"Among Us", CFrame.new(0, 10, -7000)},
+	{"Breaking Bad", CFrame.new(0, 10, 10000)}, {"Forest", CFrame.new(0, 10, -15000)}
+}) do
+	makeBtn(Pages.maps, m[1], function()
+		local hrp = getHRP()
+		if hrp then hrp.CFrame = m[2] end
+	end)
+end
+
+-- Hint & Message
+local hintBox = makeBox(Pages.hm, "Hint text")
+makeBtn(Pages.hm, "Set Hint 5s", function()
+	if hintBox.Text == "" then return end
+	local h = safe("Hint", {}, workspace)
+	h.Text = hintBox.Text
+	Debris:AddItem(h, 5)
+end)
+makeBtn(Pages.hm, "Set Message 5s", function()
+	if hintBox.Text == "" then return end
+	local m = safe("Message", {}, workspace)
+	m.Text = hintBox.Text
+	Debris:AddItem(m, 5)
+end)
+local chatBox = makeBox(Pages.hm, "Chat message")
+makeBtn(Pages.hm, "Send Chat", function() if chatBox.Text ~= "" then sendChat(chatBox.Text) end end)
+makeBtn(Pages.hm, "Spam x10", function()
+	if chatBox.Text == "" then return end
+	_task.spawn(function() for i = 1, 10 do sendChat(chatBox.Text) _task.wait(0.5) end end)
+end)
+
+-- Scripts & Hubs
+makeBtn(Pages.sh, "Force R6", forceR6)
+makeBtn(Pages.sh, "Fly Toggle", toggleFly)
+makeBtn(Pages.sh, "Infinite Jump", function()
+	UIS.JumpRequest:Connect(function() local h = getHum() if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end end)
+end)
+makeBtn(Pages.sh, "Full Bright", function()
+	Light.Ambient = Color3.new(1, 1, 1)
+	Light.OutdoorAmbient = Color3.new(1, 1, 1)
+	Light.Brightness = 3
+end)
+makeBtn(Pages.sh, "Remove Fog", function() Light.FogEnd = 1e6 end)
+makeBtn(Pages.sh, "Restore Lighting", function()
+	Light.FogEnd = 1e5
+	Light.Ambient = Color3.fromRGB(70, 70, 70)
+	Light.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+	Light.Brightness = 2
+end)
+makeBtn(Pages.sh, "DEX", openDEX)
+makeBtn(Pages.sh, "Spawn Dummy", spawnDummy)
+makeBtn(Pages.sh, "Noclip Toggle", function()
+	_G.__nc = not _G.__nc
+	for _, v in pairs(getChar():GetDescendants()) do
+		if v:IsA("BasePart") then v.CanCollide = not _G.__nc end
+	end
+end)
+makeBtn(Pages.sh, "Anti-AFK", function()
+	_G.__afk = true
+	_task.spawn(function() while _G.__afk do LP.Idled:Connect(function() end) _task.wait(60) end end)
+end)
+makeBtn(Pages.sh, "Gravity 0", function() workspace.Gravity = 0 end)
+makeBtn(Pages.sh, "Gravity Normal", function() workspace.Gravity = 196.2 end)
+
+-- Particles
+for _, p in ipairs({
+	{"Fire", "243660998"}, {"Sparkles", "375759200"}, {"Smoke", "491211570"},
+	{"Snow", "542301116"}, {"Poison", "245898165"}, {"Hearts", "243830737"},
+	{"MLG", "303510945"}, {"Rainbow", "303510945"}, {"Blood", "491211570"}, {"Stars", "243830737"}
+}) do
+	makeBtn(Pages.particles, p[1], function() addParticle(p[2]) end)
+end
+local pBox = makeBox(Pages.particles, "Particle ID")
+makeBtn(Pages.particles, "Spawn Custom", function() if pBox.Text ~= "" then addParticle(pBox.Text) end end)
+makeBtn(Pages.particles, "Clear All", clearParticles)
+
+-- Other Scripts
+makeBtn(Pages.oc, "Infinite Yield", function() end)
+makeBtn(Pages.oc, "Remote Spy", function() end)
+makeBtn(Pages.oc, "ESP All", function()
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl ~= LP and pl.Character then
+			local h = pl.Character:FindFirstChild("Head")
+			if h then
+				local bg = safe("BillboardGui", {Size = UDim2.new(0, 200, 0, 50), AlwaysOnTop = true}, h)
+				safe("TextLabel", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = pl.Name, TextColor3 = Color3.fromRGB(255, 0, 0), Font = Enum.Font.SourceSansBold, TextSize = 14}, bg)
+			end
+		end
+	end
+end)
+
+-- Items / Tools
+for _, m in ipairs({
+	{"Knife", Vector3.new(1, 1, 3), "Really black", 25},
+	{"Fire Axe", Vector3.new(1, 1, 4), "Brown", 40},
+	{"Gravity Hammer", Vector3.new(2, 2, 4), "Really black", 75},
+	{"Sword", Vector3.new(0.5, 0.5, 5), "Really black", 35},
+	{"Diamond Sword", Vector3.new(0.5, 0.5, 5), "Cyan", 40},
+	{"Laser Sword", Vector3.new(0.4, 0.4, 5), "Neon green", 60},
+	{"Red Scythe", Vector3.new(0.5, 0.5, 7), "Bright red", 100},
+	{"Lightsaber", Vector3.new(0.3, 0.3, 6), "Neon blue", 80},
+	{"Katana", Vector3.new(0.3, 0.3, 5), "Institutional white", 70},
+	{"Sledge Hammer", Vector3.new(1, 1, 4), "Really black", 55},
+	{"Pistol", Vector3.new(0.4, 0.6, 1.2), "Really black", 25},
+	{"Glock", Vector3.new(0.4, 0.6, 1.2), "Really black", 35},
+	{"AK-47", Vector3.new(0.5, 0.5, 3), "Really black", 50},
+	{"M4A1", Vector3.new(0.5, 0.5, 3), "Really black", 45},
+	{"AWP", Vector3.new(0.4, 0.4, 4), "Really black", 150},
+	{"RPG", Vector3.new(1, 1, 4), "Really black", 200}
+}) do
+	makeBtn(Pages.ToOOLS, m[1], function()
+		if m[1]:find("Sword") or m[1]:find("Knife") or m[1]:find("Axe") or m[1]:find("Hammer") or m[1]:find("Scythe") or m[1]:find("Saber") or m[1]:find("Katana") then
+			makeMelee(m[1], m[2], m[3], m[4])
+		else
+			makeGun(m[1], m[2], m[3], m[4])
+		end
+	end)
+end
+
+-- NPC
+for _, n in ipairs({"Dummy", "Roblox", "builderman", "Shedletsky", "Polemenus", "MrBeast", "PewDiePie", "Ninja", "Dream", "Technoblade", "Sans", "Chara", "Freddy Fazbear", "Mario", "Sonic"}) do
+	makeBtn(Pages.NpC, "Spawn " .. n, function() spawnNPC(n, 1) end)
+end
+local npcBox = makeBox(Pages.NpC, "Username")
+makeBtn(Pages.NpC, "Spawn Custom", function()
+	if npcBox.Text ~= "" then
+		local ok, uid = pcall(function() return Players:GetUserIdFromNameAsync(npcBox.Text) end)
+		if ok then spawnNPC(npcBox.Text, uid) end
+	end
+end)
+makeBtn(Pages.NpC, "Kill All NPCs", function()
+	for _, v in pairs(workspace:GetChildren()) do
+		if v:IsA("Model") and v:FindFirstChildOfClass("Humanoid") and v ~= getChar() then v:BreakJoints() end
+	end
+end)
+
+-- Entities / Bosses
+for _, n in ipairs({"Xester BOSS", "Sans BOSS", "Thanos BOSS", "Dummy Titan", "Zombie", "Chiken Jockey", "Conk Boss", "Su Tart Boss", "Furry Boss", "Chara Boss", "Jevil Boss", "Necromancer Boss", "Pennywise", "Juggernaut"}) do
+	makeBtn(Pages.ENT, "Spawn " .. n, function() spawnNPC(n, 1) end)
+end
+
+-- Cars
+local function spawnVehicle(name, size, color)
+	local hrp = getHRP(); if not hrp then return end
+	local v = safe("Model", {Name = "HH_" .. name}, workspace)
+	local base = safe("Part", {Name = "Chassis", Size = size, BrickColor = BrickColor.new(color), Material = Enum.Material.Metal, CFrame = hrp.CFrame * CFrame.new(0, 2, -10)}, v)
+	local seat = safe("VehicleSeat", {Name = "Seat", Size = Vector3.new(2, 1, 2), BrickColor = BrickColor.new("Really black"), CFrame = base.CFrame * CFrame.new(0, size.Y / 2 + 0.5, 0)}, v)
+	safe("WeldConstraint", {Part0 = base, Part1 = seat}, seat)
+end
+for _, v in ipairs({
+	{"Bugatti", Vector3.new(6, 2, 12), "Really black"},
+	{"Tesla", Vector3.new(6, 2, 12), "Institutional white"},
+	{"Dodge", Vector3.new(6, 2, 12), "Bright red"},
+	{"Supra", Vector3.new(6, 2, 12), "Bright orange"},
+	{"Skyline", Vector3.new(6, 2, 12), "Bright blue"},
+	{"Lambo", Vector3.new(6, 2, 12), "Bright yellow"},
+	{"Ferrari", Vector3.new(6, 2, 12), "Bright red"},
+	{"Motorcycle", Vector3.new(2, 2, 6), "Really black"},
+	{"City Bus", Vector3.new(8, 4, 18), "Bright yellow"},
+	{"Boat", Vector3.new(6, 3, 10), "Bright blue"},
+	{"Helicopter", Vector3.new(8, 4, 12), "Really black"},
+	{"Tank", Vector3.new(6, 3, 12), "Olive"},
+	{"F1", Vector3.new(4, 1, 12), "Bright red"}
+}) do
+	makeBtn(Pages.cars, v[1], function() spawnVehicle(v[1], v[2], v[3]) end)
+end
+makeBtn(Pages.cars, "Remove All", function()
+	for _, v in pairs(workspace:GetChildren()) do
+		if v:IsA("Model") and v.Name:find("HH_") then v:Destroy() end
+	end
+end)
+
+-- Executor
+makeBtn(Pages.executorr, "Running: " .. _exec, function() end)
+makeBtn(Pages.executorr, "Load Furk", function()
+	pcall(function() local m = require(10650211342) if type(m) == "table" and m.load then m.load(LP.Name) end end)
+end)
+makeBtn(Pages.executorr, "Load Sirhurt", function()
+	pcall(function() local m = require(10757971919) if type(m) == "table" and m.load then m.load(LP.Name) end end)
+end)
+makeBtn(Pages.executorr, "Load Kavo", function()
+	pcall(function() local m = require(11289953696) if type(m) == "table" and m.load then m.load(LP.Name) end end)
+end)
+local ssIDBox = makeBox(Pages.executorr, "Module ID")
+makeBtn(Pages.executorr, "Load by ID", function()
+	if ssIDBox.Text == "" then return end
+	pcall(function() local m = require(tonumber(ssIDBox.Text)) if type(m) == "table" and m.load then m.load(LP.Name) end end)
+end)
+makeBtn(Pages.executorr, "Scan RS", function()
+	for _, v in pairs(RS:GetDescendants()) do
+		if v:IsA("ModuleScript") and (v.Name:lower():find("loader") or v.Name:lower():find("backdoor")) then
+			warn("HappyHub found: " .. v:GetFullName())
+		end
+	end
+end)
+
+-- Scripts
+makeBtn(Pages.scripts, "Fire All (Empty)", function()
+	for _, r in ipairs(RS:GetDescendants()) do
+		if r:IsA("RemoteEvent") then pcall(function() r:FireServer() end) end
+	end
+end)
+makeBtn(Pages.scripts, "Fire All (Kill)", function()
+	for _, r in ipairs(RS:GetDescendants()) do
+		if r:IsA("RemoteEvent") then
+			pcall(function() r:FireServer("Kill", LP) end)
+			pcall(function() r:FireServer("kill", LP.Name) end)
+		end
+	end
+end)
+makeBtn(Pages.scripts, "Fire All (Admin)", function()
+	for _, r in ipairs(RS:GetDescendants()) do
+		if r:IsA("RemoteEvent") then
+			pcall(function() r:FireServer(":admin") end)
+			pcall(function() r:FireServer("Admin", LP) end)
+		end
+	end
+end)
+local remotePathBox = makeBox(Pages.scripts, "Remote path")
+local remoteArgBox = makeBox(Pages.scripts, "Arg 1")
+makeBtn(Pages.scripts, "Fire Path", function()
+	local obj = game
+	for p in remotePathBox.Text:gmatch("[^%.]+") do
+		obj = obj:FindFirstChild(p)
+		if not obj then return end
+	end
+	if obj:IsA("RemoteEvent") then
+		obj:FireServer(remoteArgBox.Text ~= "" and remoteArgBox.Text or nil)
+	end
+end)
+
+-- About Us
+for _, c in ipairs({
+	"HappyHub SS v1.0",
+	"Owner: Polemenus",
+	"Scripter: HappyAppy404",
+	"Support: m00pkidd",
+	"Decals: pl00nkidd",
+	"Audio: Creepy Quad",
+	"Telegram: t.me/HappyHub111",
+	"Thank you for using HappyHub!"
+}) do
+	local l = safe("TextLabel", {Size = UDim2.new(1, 0, 0, 20), BackgroundColor3 = Black, Text = "  " .. c, TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.SourceSans, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left}, Pages.abo)
+	corner(l, 0)
+end
+
+-- Admin
+makeBtn(Pages.admin, "God", god)
+makeBtn(Pages.admin, "Un-God", ungod)
+makeBtn(Pages.admin, "Heal", heal)
+makeBtn(Pages.admin, "Invisible", invis)
+makeBtn(Pages.admin, "Visible", vis)
+for _, s in ipairs({16, 50, 100, 200, 500}) do
+	makeBtn(Pages.admin, "Speed " .. s, function() setSpeed(s) end)
+end
+for _, j in ipairs({50, 100, 200, 500}) do
+	makeBtn(Pages.admin, "Jump " .. j, function() setJump(j) end)
+end
+makeBtn(Pages.admin, "Kill Local", function() getChar():BreakJoints() end)
+makeBtn(Pages.admin, "Respawn", function() LP:LoadCharacter() end)
+makeBtn(Pages.admin, "Force Field", function()
+	local hrp = getHRP(); if hrp then safe("ForceField", {}, hrp) end
+end)
+local admBox = makeBox(Pages.admin, "Player name")
+makeBtn(Pages.admin, "TP to Player", function()
+	local pl = Players:FindFirstChild(admBox.Text)
+	if pl and pl.Character then
+		local t = pl.Character:FindFirstChild("HumanoidRootPart")
+		local hrp = getHRP()
+		if t and hrp then hrp.CFrame = t.CFrame + Vector3.new(0, 3, 0) end
+	end
+end)
+makeBtn(Pages.admin, "View Player", function()
+	local pl = Players:FindFirstChild(admBox.Text)
+	if pl and pl.Character then
+		local t = pl.Character:FindFirstChild("HumanoidRootPart")
+		if t then Cam.CFrame = t.CFrame end
+	end
+end)
+makeBtn(Pages.admin, "Bring Player", function()
+	local pl = Players:FindFirstChild(admBox.Text)
+	if pl and pl.Character then
+		local t = pl.Character:FindFirstChild("HumanoidRootPart")
+		local hrp = getHRP()
+		if t and hrp then t.CFrame = hrp.CFrame + Vector3.new(0, 0, -3) end
+	end
+end)
+makeBtn(Pages.admin, "Kill Player", function()
+	local pl = Players:FindFirstChild(admBox.Text)
+	if pl and pl.Character then
+		local h = pl.Character:FindFirstChildOfClass("Humanoid")
+		if h then h:TakeDamage(999) end
+	end
+end)
+
+-- Output
+local logOut = safe("TextLabel", {Size = UDim2.new(1, 0, 0, 240), BackgroundColor3 = Black, Text = "", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.Code, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true}, Pages.out)
+corner(logOut, 0)
+local logBuf = {}
+local function pushLog(m)
+	table.insert(logBuf, os.date("[%H:%M:%S] ") .. m)
+	if #logBuf > 30 then table.remove(logBuf, 1) end
+	logOut.Text = "  " .. table.concat(logBuf, "\n  ")
+end
+makeBtn(Pages.out, "Print Player Info", function() pushLog(LP.Name .. " | " .. LP.UserId) end)
+makeBtn(Pages.out, "Print Game Info", function() pushLog("Place: " .. game.PlaceId) end)
+makeBtn(Pages.out, "Print Ping", function() pushLog("Ping: " .. math.floor(LP:GetNetworkPing() * 1000) .. "ms") end)
+makeBtn(Pages.out, "Clear", function() logBuf = {} logOut.Text = "" end)
+makeBtn(Pages.out, "Copy Logs", function() _setClip(table.concat(logBuf, "\n")) end)
+
+-- Client Scripts
+makeBtn(Pages.localis, "Client Anti-Cheat Bypass", function() end)
+makeBtn(Pages.localis, "Speed Boost", function() setSpeed(50) end)
+makeBtn(Pages.localis, "Jump Boost", function() setJump(100) end)
+makeBtn(Pages.localis, "TP to Spawn", function()
+	local hrp = getHRP()
+	if hrp then
+		local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+		if spawn then hrp.CFrame = spawn.CFrame + Vector3.new(0, 5, 0) end
+	end
+end)
+
+-- Destroy
+makeBtn(Pages.dest, "Kill All NPCs", function()
+	for _, v in pairs(workspace:GetChildren()) do
+		if v:IsA("Model") and v:FindFirstChildOfClass("Humanoid") and v ~= getChar() then v:BreakJoints() end
+	end
+end)
+makeBtn(Pages.dest, "Delete HappyHub Objects", function()
+	for _, v in pairs(workspace:GetChildren()) do
+		if v:IsA("Model") and (v.Name:find("HH_") or v.Name:find("HappyHub") or v.Name:find("BOSS")) then v:Destroy() end
+	end
+end)
+makeBtn(Pages.dest, "Remove Workspace Effects", function()
+	for _, v in pairs(workspace:GetDescendants()) do
+		if v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then v:Destroy() end
+	end
+end)
+
+-- Players
+local function refreshPlayers()
+	for _, c in ipairs(Pages.playerr:GetChildren()) do
+		if c:IsA("TextButton") and c.Name == "__p" then c:Destroy() end
+	end
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl ~= LP then
+			local btn = makeBtn(Pages.playerr, pl.Name .. " (" .. pl.UserId .. ")", function()
+				local target = pl.Character and pl.Character:FindFirstChild("HumanoidRootPart")
+				local hrp = getHRP()
+				if target and hrp then
+					hrp.CFrame = target.CFrame + Vector3.new(0, 3, 0)
+				end
+			end)
+			btn.Name = "__p"
+		end
+	end
+end
+makeBtn(Pages.playerr, "Refresh", refreshPlayers)
+refreshPlayers()
+
+-- Settings
+local spdBox = makeBox(Pages.set, "Speed")
+local jmpBox = makeBox(Pages.set, "Jump")
+makeBtn(Pages.set, "Apply Speed", function() local n = tonumber(spdBox.Text) if n then setSpeed(n) end end)
+makeBtn(Pages.set, "Apply Jump", function() local n = tonumber(jmpBox.Text) if n then setJump(n) end end)
+for _, t in ipairs({
+	{"Purple", Color3.fromRGB(140, 0, 255)},
+	{"Red", Color3.fromRGB(255, 60, 60)},
+	{"Blue", Color3.fromRGB(0, 170, 255)},
+	{"Green", Color3.fromRGB(0, 255, 100)},
+	{"Gold", Color3.fromRGB(255, 215, 0)}
+}) do
+	makeBtn(Pages.set, t[1] .. " Theme", function() Accent = t[2] end)
+end
+makeBtn(Pages.set, "Shutdown GUI", function() ScreenGui:Destroy() end)
+
+-- Jumpscare
+for _, j in ipairs({
+	{"Saul", 11435796419}, {"Doge", 13771424968}, {"Illuminati", 10471929643},
+	{"MrBeast", 13108853211}, {"Gmod", 10564376174}, {"Scary", 12150808602},
+	{"Troll", 12965021472}, {"K0op", 14469544503}, {"SpongeBob", 12454293491},
+	{"Jesus", 13131075474}, {"Cat", 10487174641}, {"Skeleton", 10499867055},
+	{"Zalgo", 10601058002}, {"Nuke", 10576396754}, {"Big Patrick", 12479462985},
+	{"Big Freddy", 12480272980}, {"Gru", 13601556017}, {"Sans", 13580123456}
+}) do
+	makeBtn(Pages.jumps, j[1], function() jumpscare(tostring(j[2])) end)
+end
+
+-- Credits
+for _, c in ipairs({
+	"Polemenus - Owner, UI, Scripts",
+	"HappyAppy404 - Co-owner, Scripter",
+	"m00pkidd - Support, Scripts",
+	"pl00nkidd - Decals",
+	"Creepy Quad - Audio",
+	"YOU - For using HappyHub!",
+	"Exec: " .. _exec
+}) do
+	local l = safe("TextLabel", {Size = UDim2.new(1, 0, 0, 20), BackgroundColor3 = Black, Text = "  " .. c, TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.SourceSans, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left}, Pages.crd)
+	corner(l, 0)
+end
+
+-- Faces
+for _, f in ipairs({
+	{"Scary", 1526946939}, {"CoolKid", 1495999813}, {"1X1X1X1", 1509050425},
+	{"Trollface", 1495999813}, {"Pepe", 1495999813}, {"Doge", 1495999813},
+	{"Epic", 1495999813}, {"Joker", 1495999813}, {"Snoop", 1495999813}, {"Gore", 1495999813}
+}) do
+	makeBtn(Pages.facec, f[1], function() setFace(f[2]) end)
+end
+local faceBox = makeBox(Pages.facec, "Face ID")
+makeBtn(Pages.facec, "Set Custom", function() if faceBox.Text ~= "" then setFace(faceBox.Text) end end)
+
+-- Avatars
+for _, m in ipairs({
+	{"Polemenus", "Polemenus"}, {"Roblox", "Roblox"}, {"Builderman", "builderman"},
+	{"Shedletsky", "Shedletsky"}, {"MrBeast", "MrBeast"}, {"PewDiePie", "PewDiePie"},
+	{"Obama", "BarackObama"}, {"Trump", "realDonaldTrump"}, {"Elon Musk", "ElonMusk"},
+	{"Sans", "Sans"}, {"Chara", "Chara"}, {"Jevil", "Jevil"}, {"Thanos", "Thanos"},
+	{"Mario", "Mario"}, {"Sonic", "Sonic"}, {"Pikachu", "Pikachu"}
+}) do
+	makeBtn(Pages.Avatars, m[1] .. " Morph", function() morphName(m[2]) end)
+end
+local morphBox = makeBox(Pages.Avatars, "Username")
+makeBtn(Pages.Avatars, "Morph Custom", function() if morphBox.Text ~= "" then morphName(morphBox.Text) end end)
+makeBtn(Pages.Avatars, "Reset Normal", function() LP:LoadCharacter() end)
+
+-- Social Nets
+makeBtn(Pages.nt, "Telegram Copy", function() _setClip("https://t.me/HappyHub111") end)
+makeBtn(Pages.nt, "YouTube", function() _setClip("@Polemenus") end)
+makeBtn(Pages.nt, "TikTok", function() _setClip("@polemenus") end)
+makeBtn(Pages.nt, "Roblox", function() _setClip("Polemenus") end)
+makeBtn(Pages.nt, "Open Telegram", function() pcall(function() GuiSvc:OpenBrowserWindow("https://t.me/HappyHub111") end) end)
+
+-- Props
+for _, p in ipairs({"Soda Can", "Chair", "Table", "Cirno Plush", "Rock", "Amogus", "Box", "Mountain Dew", "Doritos"}) do
+	makeBtn(Pages.props, p, function() end)
+end
+
+-- Update Logs
+for _, l in ipairs({
+	"v1.0 - Initial release",
+	"v1.1 - Added executor, about us, admin, output",
+	"v1.2 - Added 2 option, added props",
+	"v2.0 - Design rework, more scripts"
+}) do
+	local lb = safe("TextLabel", {Size = UDim2.new(1, 0, 0, 20), BackgroundColor3 = Black, Text = "  " .. l, TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.SourceSans, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left}, Pages.log)
+	corner(lb, 0)
+end
+
+-- ============ SIDEBAR BUTTONS ============
+sideBtn(leftSidebar, "Home🏡", "home")
+sideBtn(leftSidebar, "Sky🌌", "sky")
+sideBtn(leftSidebar, "Decals🗺", "decals")
+sideBtn(leftSidebar, "Songs🎶", "songs")
+sideBtn(leftSidebar, "Maps🌍", "maps")
+sideBtn(leftSidebar, "Hint & Message💬", "hm")
+sideBtn(leftSidebar, "Hubs🎇", "sh")
+sideBtn(leftSidebar, "Particles🎆", "particles")
+sideBtn(leftSidebar, "Other scripts📜", "oc")
+sideBtn(leftSidebar, "Items🔫", "ToOOLS")
+sideBtn(leftSidebar, "NPC🏃‍♂️", "NpC")
+sideBtn(leftSidebar, "Entity🎮", "ENT")
+sideBtn(leftSidebar, "Cars🚗", "cars")
+sideBtn(leftSidebar, "Executor🛠", "executorr")
+sideBtn(leftSidebar, "Scripts🌀", "scripts")
+sideBtn(leftSidebar, "About Us👥", "abo")
+sideBtn(leftSidebar, "Admin👨‍💻", "admin")
+sideBtn(leftSidebar, "Output🎞", "out")
+
+sideBtn(rightSidebar, "Destroy💥", "dest")
+sideBtn(rightSidebar, "Client Scripts⚒ ", "localis")
+sideBtn(rightSidebar, "Update Logs💬", "log")
+sideBtn(rightSidebar, "Players👥", "playerr")
+sideBtn(rightSidebar, "Settings⚙️", "set")
+sideBtn(rightSidebar, "Jumpscare👻", "jumps")
+sideBtn(rightSidebar, "Credits🗣", "crd")
+sideBtn(rightSidebar, "Faces😶", "facec")
+sideBtn(rightSidebar, "Avatars🚻", "Avatars")
+sideBtn(rightSidebar, "Social Nets🌐", "nt")
+
+-- ============ TITLE BAR HANDLERS ============
+r6Btn.MouseButton1Click:Connect(function() forceR6() end)
+dummyBtn.MouseButton1Click:Connect(function() spawnDummy() end)
+dexBtn.MouseButton1Click:Connect(function() openDEX() end)
+reBtn.MouseButton1Click:Connect(function() end)
+rejBtn.MouseButton1Click:Connect(function() end)
+
+-- ============ COMMAND BAR ============
+cmdInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed and cmdInput.Text ~= "" and cmdInput.Text ~= "Here Enter Commands." then
+		local cmd = cmdInput.Text:lower()
+		cmdInput.Text = ""
+		if cmd == "rejoin" then rejoin()
+		elseif cmd:match("^speed (%d+)$") then setSpeed(tonumber(cmd:match("^speed (%d+)$")))
+		elseif cmd:match("^jump (%d+)$") then setJump(tonumber(cmd:match("^jump (%d+)$")))
+		elseif cmd:match("^morph (.+)$") then morphName(cmd:match("^morph (.+)$"))
+		elseif cmd:match("^spawn (.+)$") then spawnNPC(cmd:match("^spawn (.+)$"), 1)
+		elseif cmd == "god" then god()
+		elseif cmd == "ungod" then ungod()
+		elseif cmd == "heal" then heal()
+		elseif cmd == "r6" then forceR6()
+		elseif cmd == "dex" then openDEX()
+		elseif cmd == "fly" then toggleFly()
+		elseif cmd == "reset" then getChar():BreakJoints() end
+	end
+end)
+
+-- ============ DRAGGING ============
+local dragging, dragStart, dragPos
+titleLabel.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+		dragging = true dragStart = i.Position dragPos = kabum.Position
+	end
+end)
+UIS.InputChanged:Connect(function(i)
+	if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+		local d = i.Position - dragStart
+		kabum.Position = UDim2.new(dragPos.X.Scale, dragPos.X.Offset + d.X, dragPos.Y.Scale, dragPos.Y.Offset + d.Y)
+	end
+end)
+UIS.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end
+end)
+
+-- Logo toggle
+local logoOpen = true
+logoBtn.MouseButton1Click:Connect(function()
+	logoOpen = not logoOpen
+	kabum.Visible = logoOpen
+	playClick()
+end)
+
+showPage("home")
+print("[HappyHub SS] Loaded - " .. _exec)
