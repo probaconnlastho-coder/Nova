@@ -1,0 +1,2794 @@
+-- ========================================================
+-- AUREUS v15.5 — Complete Integrated
+-- UI:      v14.0 base (preserved)
+-- Engine:  v1.1 beacon-verified server-side executor
+-- Hub:     ScriptBlox live API (filters, search, pagination, danger level)
+-- Extras:  auto-scan, Games check, username gate, background dots,
+--          startup logo with 3-tier image fallback, sidebar logo fallback,
+--          safe Sensation Hub loader (pcall-wrapped require)
+-- Honest contract:
+--   SS/Require only succeed if the game has a real loadstring backdoor.
+--   Local execution always works. Timeouts are reported as timeouts.
+--   No fake success. No fabricated APIs.
+-- ========================================================
+
+local Aureus = {}
+
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService  = game:GetService("UserInputService")
+local TweenService      = game:GetService("TweenService")
+local RunService        = game:GetService("RunService")
+local CoreGui           = game:GetService("CoreGui")
+local HttpService       = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
+
+Aureus.Version = "15.5"
+Aureus.Hits = {}
+Aureus.Running = false
+Aureus.History = {}
+Aureus.LocalLog = {}
+Aureus.selectedHit = nil
+Aureus.Username = nil
+Aureus.Settings = {
+    ProbeTimeout = 2.5,
+    RateLimitMs = 0,
+    AutoSelectFirstHit = true,
+    SkipKnownSafeRemotes = true,
+    IncludeRemoteFunctions = false,
+    ResultTimeout = 6,
+}
+
+-- Personal (local) scripts list — Sensation Hub now fails safely
+Aureus.Scripts = {
+    {
+        id = "sensation-hub-aureus",
+        name = "(WORKING) Sensation hub Aureus",
+        runs = 377700, date = "Jun 1, 2025",
+        approved = true, category = "Backdoor", favorite = false,
+        description = "Aureus version of Sensation hub to use.",
+        requireAssetId = 129930360673005,
+        code = table.concat({
+            "-- Sensation Hub Aureus (safe loader)",
+            "local __assetId = 129930360673005",
+            "local __ok, __mod = pcall(require, __assetId)",
+            "if __ok and type(__mod) == 'function' then",
+            "    local __ran, __err = pcall(__mod, game.Players.LocalPlayer.Name)",
+            "    if not __ran then warn('[Aureus] Sensation Hub runtime error: ' .. tostring(__err)) end",
+            "elseif __ok then",
+            "    warn('[Aureus] Sensation Hub loaded but did not return a function (got ' .. type(__mod) .. ').')",
+            "else",
+            "    warn('[Aureus] Sensation Hub require failed. Your executor does not support external asset requires.')",
+            "    warn('[Aureus] Details: ' .. tostring(__mod))",
+            "end",
+        }, "\n"),
+    },
+}
+
+Aureus.ScriptBlox = {
+    BaseUrl = "https://scriptblox.com/api",
+    Page = 1, MaxPerPage = 15, TotalPages = 1, Loading = false,
+    Results = {},
+    Filters = {
+        mode = "", verified = "", key = "", universal = "",
+        patched = "0", sortBy = "views", order = "desc", search = "",
+    },
+}
+Aureus.ScriptFilters = { scope = "hub", category = "All", search = "" }
+
+Aureus.Config = {
+    Colors = {
+        Background  = Color3.fromRGB(10, 10, 10),
+        Sidebar     = Color3.fromRGB(18, 18, 18),
+        Card        = Color3.fromRGB(25, 25, 25),
+        CardHover   = Color3.fromRGB(30, 30, 30),
+        Accent      = Color3.fromRGB(255, 68, 68),
+        AccentHi    = Color3.fromRGB(255, 90, 90),
+        Text        = Color3.fromRGB(240, 240, 240),
+        SubText     = Color3.fromRGB(150, 150, 150),
+        Border      = Color3.fromRGB(40, 40, 40),
+        Success     = Color3.fromRGB(80, 210, 130),
+        Warning     = Color3.fromRGB(241, 196, 15),
+        Error       = Color3.fromRGB(231, 76, 60),
+        Info        = Color3.fromRGB(90, 170, 240),
+        NotifBg     = Color3.fromRGB(25, 25, 25),
+        NotifBorder = Color3.fromRGB(45, 45, 45),
+        ToggleOn    = Color3.fromRGB(255, 68, 68),
+        ToggleOff   = Color3.fromRGB(60, 60, 60),
+        Discord     = Color3.fromRGB(88, 101, 242),
+    },
+    Font        = Enum.Font.GothamBold,
+    FontRegular = Enum.Font.Gotham,
+    FontCode    = Enum.Font.Code,
+    Assets = {
+        SplashLogo  = { id = 130714858749511, size = 420 },
+        SidebarLogo = { id = 74662609326732,  size = 150 },
+        Fallback    = "rbxasset://textures/whiteCircle.png",
+    },
+}
+
+local Create = function(class, props)
+    local i = Instance.new(class)
+    for k, v in pairs(props) do i[k] = v end
+    return i
+end
+local new = Create
+local function uuid12() return HttpService:GenerateGUID(false):gsub("-", ""):sub(1, 12) end
+local function now() return os.date("%H:%M:%S") end
+local function shortPath(full) return (full:gsub("^game%.", "")):sub(-60) end
+local function formatViews(n)
+    if n >= 1000000 then return string.format("%.1fM", n / 1000000) end
+    if n >= 1000    then return string.format("%.1fK", n / 1000)    end
+    return tostring(n)
+end
+local C = Aureus.Config.Colors
+
+-- ========================================================
+-- IMAGE FALLBACK HELPER
+-- ========================================================
+local function applyImageWithFallback(imageLabel, assetCfg, tintColor)
+    local id = tostring(assetCfg.id)
+    local size = assetCfg.size or 150
+    local candidates = {
+        ("rbxassetid://%s"):format(id),
+        ("rbxthumb://type=Asset&id=%s&w=%d&h=%d"):format(id, size, size),
+        Aureus.Config.Assets.Fallback,
+    }
+    local idx = 1
+    local function tryNext()
+        if idx > #candidates then return end
+        local url = candidates[idx]
+        local isLast = (idx == #candidates)
+        idx = idx + 1
+        imageLabel.Image = url
+        if isLast and tintColor then
+            imageLabel.ImageColor3 = tintColor
+        end
+        local conn
+        conn = imageLabel.ImageFailed:Connect(function()
+            conn:Disconnect()
+            tryNext()
+        end)
+    end
+    tryNext()
+end
+
+-- ========================================================
+-- USERNAME GATE
+-- ========================================================
+function Aureus:requireUsername(action)
+    if not self.Username or self.Username == "" then
+        self:Notify("Username Required",
+            "Set your Roblox username in the Dashboard before " .. (action or "continuing") .. ".",
+            5, "warning")
+        if self.SwitchTab then self.SwitchTab("Dashboard") end
+        return false
+    end
+    return true
+end
+
+-- ========================================================
+-- BEACON SYSTEM
+-- ========================================================
+local pending = {}
+
+local function ensureBeaconListener()
+    ReplicatedStorage.ChildAdded:Connect(function(child)
+        if not child:IsA("RemoteEvent") then return end
+        local n = child.Name
+        local tok
+        if n:sub(1, 11) == "__AUREUS_V_" then tok = n:sub(12)
+        elseif n:sub(1, 11) == "__AUREUS_R_" then tok = n:sub(12)
+        else return end
+
+        task.spawn(function()
+            local resolved = false
+            local conn
+            conn = child.OnClientEvent:Connect(function(payload)
+                if resolved then return end
+                resolved = true
+                local rec = pending[tok]
+                if rec then rec.cb(payload) end
+                pending[tok] = nil
+                conn:Disconnect()
+            end)
+            task.wait(Aureus.Settings.ResultTimeout + 2)
+            if not resolved then
+                local rec = pending[tok]
+                if rec then rec.cb(nil) end
+                pending[tok] = nil
+                conn:Disconnect()
+            end
+            pcall(function() child:Destroy() end)
+        end)
+    end)
+end
+
+local function beaconCode(kind)
+    local tok = uuid12()
+    local name = ("__AUREUS_%s_%s"):format(kind, tok)
+    local msg  = (kind == "V") and tok or "__RESULT__"
+    local code = ([[
+local __re = Instance.new("RemoteEvent")
+__re.Name = %q
+__re.Parent = game:GetService("ReplicatedStorage")
+__re:FireAllClients(%q)
+task.wait(3)
+__re:Destroy()
+]]):format(name, msg)
+    return tok, code
+end
+
+local function resultCode(userCode)
+    local tok = uuid12()
+    local name = "__AUREUS_R_" .. tok
+    local wrapped = ([[
+local __ok, __err = pcall(function()
+%s
+end)
+local __re = Instance.new("RemoteEvent")
+__re.Name = %q
+__re.Parent = game:GetService("ReplicatedStorage")
+__re:FireAllClients(__ok and "ok" or ("ERR: " .. tostring(__err)))
+task.wait(3)
+__re:Destroy()
+]]):format(userCode, name)
+    return tok, wrapped
+end
+
+local function awaitToken(tok, timeout)
+    local done, result = false, nil
+    pending[tok] = { cb = function(p) done = true; result = p end }
+    local t0 = tick()
+    while not done and (tick() - t0) < timeout do task.wait(0.05) end
+    pending[tok] = nil
+    return done and result or nil
+end
+
+-- ========================================================
+-- PAYLOAD FORMATS
+-- ========================================================
+local FORMATS = {
+    { name = "tuple:loadstring",  wrap = function(c) return "loadstring", c end },
+    { name = "dict:script",       wrap = function(c) return { script = c } end },
+    { name = "dict:code",         wrap = function(c) return { code = c } end },
+    { name = "dict:src",          wrap = function(c) return { src = c } end },
+    { name = "tuple:exec",        wrap = function(c) return "exec", c end },
+    { name = "tuple:cmd",         wrap = function(c) return "cmd", c end },
+    { name = "tuple:require",     wrap = function(c) return "require", c end },
+    { name = "dict:cmd+src",      wrap = function(c) return { cmd = "exec", src = c } end },
+    { name = "dict:cmd+code",     wrap = function(c) return { cmd = "exec", code = c } end },
+    { name = "dict:action+payload", wrap = function(c) return { action = "run", payload = c } end },
+    { name = "prefix:exec",       wrap = function(c) return "exec:" .. c end },
+    { name = "prefix:loadstring", wrap = function(c) return "loadstring:" .. c end },
+    { name = "raw",               wrap = function(c) return c end },
+    { name = "array",             wrap = function(c) return { c } end },
+}
+
+local function isKnownSafe(remote)
+    local path = remote:GetFullName()
+    if path:find("DefaultChatSystemChatEvents", 1, true) then return true end
+    if path:find("RobloxReplicatedStorage", 1, true) then return true end
+    if path:find("CoreGui", 1, true) then return true end
+    return false
+end
+
+local function fire(remote, wrapped)
+    if remote:IsA("RemoteFunction") then
+        local ok = pcall(function()
+            task.spawn(function() pcall(function() remote:InvokeServer(wrapped) end) end)
+        end)
+        return ok
+    end
+    return pcall(function() remote:FireServer(wrapped) end)
+end
+
+-- ========================================================
+-- NOTIFICATIONS
+-- ========================================================
+local NotifContainer = Create("Frame", {
+    Name = "Notifications",
+    Size = UDim2.new(0, 340, 1, -20),
+    Position = UDim2.new(1, -360, 0, 10),
+    BackgroundTransparency = 1, ZIndex = 15, Parent = CoreGui,
+})
+Create("UIListLayout", {
+    Padding = UDim.new(0, 12),
+    VerticalAlignment = Enum.VerticalAlignment.Top,
+    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    Parent = NotifContainer,
+})
+
+function Aureus:Notify(title, message, duration, notifType)
+    duration = duration or 4
+    local accentColor = C.Accent
+    local NotifFrame = Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 80),
+        BackgroundColor3 = C.NotifBg,
+        BorderSizePixel = 0, ClipsDescendants = true, Parent = NotifContainer,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = NotifFrame })
+    Create("UIStroke", { Color = C.NotifBorder, Thickness = 1, Parent = NotifFrame })
+    Create("Frame", {
+        Size = UDim2.new(0, 4, 0.8, 0), Position = UDim2.new(0, 0, 0.1, 0),
+        BackgroundColor3 = accentColor, BorderSizePixel = 0, Parent = NotifFrame,
+    })
+    Create("TextLabel", {
+        Size = UDim2.new(1, -50, 0, 20), Position = UDim2.new(0, 20, 0, 14),
+        BackgroundTransparency = 1, Text = title,
+        TextColor3 = accentColor, Font = Aureus.Config.Font,
+        TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = NotifFrame,
+    })
+    Create("TextLabel", {
+        Size = UDim2.new(1, -50, 1, -40), Position = UDim2.new(0, 20, 0, 36),
+        BackgroundTransparency = 1, Text = message,
+        TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+        TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, Parent = NotifFrame,
+    })
+    NotifFrame.Position = UDim2.new(1, 60, 0, 0)
+    NotifFrame.BackgroundTransparency = 1
+    TweenService:Create(NotifFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 0,
+    }):Play()
+    task.delay(duration, function()
+        local t = TweenService:Create(NotifFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            Position = UDim2.new(1, 60, 0, 0), BackgroundTransparency = 1,
+        })
+        t:Play()
+        t.Completed:Connect(function() NotifFrame:Destroy() end)
+    end)
+end
+
+function Aureus:LogActivity(action, details)
+    if Aureus.LocalLog then
+        table.insert(Aureus.LocalLog, {
+            level = "info", at = now(),
+            msg = ("[activity] %s — %s"):format(action, details or ""),
+        })
+    end
+end
+
+-- ========================================================
+-- CORE SS METHODS
+-- ========================================================
+function Aureus:probe(remote, fmt)
+    local tok, code = beaconCode("V")
+    if not fire(remote, fmt.wrap(code)) then return false end
+    return awaitToken(tok, self.Settings.ProbeTimeout) == tok
+end
+
+function Aureus:scan()
+    if self.Running then
+        self:Notify("Scan", "Already running.", 3, "warning")
+        return self.Hits
+    end
+    self.Running = true
+    self.Hits = {}
+    self:refreshHitUI()
+    if self.UI and self.UI.SSStatus then
+        self.UI.SSStatus.Text = "  Enumerating remotes..."
+        self.UI.SSStatus.TextColor3 = C.Warning
+    end
+
+    local remotes = {}
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("UnreliableRemoteEvent") then
+            if not (self.Settings.SkipKnownSafeRemotes and isKnownSafe(obj)) then
+                table.insert(remotes, obj)
+            end
+        elseif self.Settings.IncludeRemoteFunctions and obj:IsA("RemoteFunction") then
+            if not (self.Settings.SkipKnownSafeRemotes and isKnownSafe(obj)) then
+                table.insert(remotes, obj)
+            end
+        end
+    end
+
+    self:Notify("Scan Started",
+        ("%d remotes × %d formats = %d probes"):format(#remotes, #FORMATS, #remotes * #FORMATS),
+        5, "info")
+
+    task.spawn(function()
+        local total = #remotes * #FORMATS
+        local done = 0
+        local t0 = tick()
+        Aureus._stopFlag = false
+
+        for _, fmt in ipairs(FORMATS) do
+            for _, remote in ipairs(remotes) do
+                if Aureus._stopFlag then goto done end
+                local hit = Aureus:probe(remote, fmt)
+                done = done + 1
+                if hit then
+                    table.insert(Aureus.Hits, {
+                        remote = remote, remoteClass = remote.ClassName,
+                        path = remote:GetFullName(), format = fmt.name,
+                        wrap = fmt.wrap, at = now(),
+                    })
+                    Aureus:Notify("HIT — VERIFIED",
+                        ("%s\nformat: %s"):format(shortPath(remote:GetFullName()), fmt.name),
+                        8, "success")
+                    Aureus:refreshHitUI()
+                    if Aureus.Settings.AutoSelectFirstHit and #Aureus.Hits == 1 then
+                        Aureus.selectedHit = Aureus.Hits[1]
+                        Aureus:refreshHitUI()
+                    end
+                end
+                if Aureus.UI and Aureus.UI.SSStatus then
+                    Aureus.UI.SSStatus.Text = ("  Scanning %d/%d  •  %d hit(s)  •  %.1fs")
+                        :format(done, total, #Aureus.Hits, tick() - t0)
+                end
+                if Aureus.Settings.RateLimitMs > 0 then
+                    task.wait(Aureus.Settings.RateLimitMs / 1000)
+                else
+                    task.wait()
+                end
+            end
+            task.wait(0.25)
+        end
+        ::done::
+        Aureus.Running = false
+        local dt = tick() - t0
+        if #Aureus.Hits == 0 then
+            Aureus:Notify("Scan Complete",
+                ("No backdoor found in %.1fs."):format(dt), 8, "warning")
+            if Aureus.UI and Aureus.UI.SSStatus then
+                Aureus.UI.SSStatus.Text = "  No backdoor. Nothing was executed server-side."
+                Aureus.UI.SSStatus.TextColor3 = C.Error
+            end
+        else
+            Aureus:Notify("Scan Complete",
+                ("%d backdoor(s) in %.1fs."):format(#Aureus.Hits, dt), 6, "success")
+            if Aureus.UI and Aureus.UI.SSStatus then
+                Aureus.UI.SSStatus.Text = ("  %d backdoor(s) confirmed. Ready."):format(#Aureus.Hits)
+                Aureus.UI.SSStatus.TextColor3 = C.Success
+            end
+        end
+    end)
+    return self.Hits
+end
+
+function Aureus:stopScan() self._stopFlag = true end
+
+function Aureus:execute(code, hitOverride)
+    if not self:requireUsername("executing server-side code") then return false, "no-username" end
+    local hit = hitOverride or self.selectedHit or self.Hits[1]
+    if not hit then
+        self:Notify("SS Execute", "No backdoor selected. Scan first.", 4, "error")
+        return false, "no-backdoor"
+    end
+    local tok, wrapped = resultCode(code)
+    if not fire(hit.remote, hit.wrap(wrapped)) then
+        self:Notify("SS Execute", "FireServer failed.", 4, "error")
+        self:logHistory("SS", code, hit, "fire-failed", nil)
+        return false, "fire-failed"
+    end
+    local res = awaitToken(tok, self.Settings.ResultTimeout)
+    local status, detail
+    if res == "ok" then
+        status = "ok"
+        self:Notify("Server Executed",
+            ("Confirmed via %s (%s)"):format(hit.remote.Name, hit.format), 5, "success")
+    elseif res == nil then
+        status = "timeout"; detail = "no beacon"
+        self:Notify("SS Execute", "Beacon timeout.", 5, "warning")
+    elseif type(res) == "string" and res:sub(1, 5) == "ERR: " then
+        status = "server-error"; detail = res:sub(6)
+        self:Notify("Server Error", detail, 6, "error")
+    else
+        status = "unknown"; detail = tostring(res)
+    end
+    self:logHistory("SS", code, hit, status, detail)
+    return status == "ok", status, detail
+end
+
+function Aureus:require(assetId, hitOverride)
+    if not self:requireUsername("executing server-side requires") then return false, "no-username" end
+    local hit = hitOverride or self.selectedHit or self.Hits[1]
+    if not hit then
+        self:Notify("Require (SS)", "No backdoor selected.", 4, "error")
+        return false, "no-backdoor"
+    end
+    local code = "return require(" .. tostring(assetId) .. ")"
+    local tok, wrapped = resultCode(code)
+    if not fire(hit.remote, hit.wrap(wrapped)) then
+        self:Notify("Require (SS)", "FireServer failed.", 4, "error")
+        self:logHistory("REQUIRE", "require("..assetId..")", hit, "fire-failed", nil)
+        return false, "fire-failed"
+    end
+    local res = awaitToken(tok, self.Settings.ResultTimeout)
+    local status, detail
+    if res == "ok" then
+        status = "ok"
+        self:Notify("Require (SS)",
+            ("require(%s) executed via %s"):format(tostring(assetId), hit.remote.Name),
+            5, "success")
+    elseif res == nil then
+        status = "timeout"
+        self:Notify("Require (SS)", "Beacon timeout.", 5, "warning")
+    elseif type(res) == "string" and res:sub(1, 5) == "ERR: " then
+        status = "server-error"; detail = res:sub(6)
+        self:Notify("Require Error", detail, 6, "error")
+    else
+        status = "unknown"; detail = tostring(res)
+    end
+    self:logHistory("REQUIRE", "require("..tostring(assetId)..")", hit, status, detail)
+    return status == "ok", status, detail
+end
+
+-- ========================================================
+-- LOCAL EXECUTOR (with dev-console noise suppression)
+-- ========================================================
+local capturedPrint = print
+local capturedWarn  = warn
+
+function Aureus:executeLocal(code, skipGate)
+    if not skipGate and not self:requireUsername("executing local code") then
+        return false, {}
+    end
+    local logs = {}
+    local oldPrint, oldWarn = print, warn
+    local capture = true
+
+    local function captureArgs(...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[#parts+1] = tostring(select(i, ...)) end
+        return table.concat(parts, " ")
+    end
+
+    print = function(...)
+        table.insert(logs, { level = "info", msg = captureArgs(...) })
+        if not capture then oldPrint(...) end
+    end
+    warn = function(...)
+        table.insert(logs, { level = "warn", msg = captureArgs(...) })
+        if not capture then oldWarn(...) end
+    end
+
+    -- Prefer loadstring, fall back to load. Both wrapped.
+    local fn, compileErr
+    local okCompile, errCompile = pcall(function()
+        if loadstring then
+            fn, compileErr = loadstring(code)
+        end
+        if not fn and load then
+            fn, compileErr = load(code)
+        end
+    end)
+    if not okCompile then
+        compileErr = errCompile
+    end
+
+    local ok, err = false, compileErr
+    if fn then
+        -- This pcall catches any runtime error inside the user's code.
+        -- Nothing escapes to the Roblox Dev Console.
+        ok, err = pcall(fn)
+    end
+
+    capture = false
+    print = oldPrint
+    warn = oldWarn
+
+    if not fn then
+        table.insert(logs, { level = "error", msg = "Compile error: " .. tostring(compileErr) })
+        return false, logs
+    end
+    if not ok then
+        table.insert(logs, { level = "error", msg = "Runtime error: " .. tostring(err) })
+    else
+        table.insert(logs, { level = "success", msg = "Executed without errors." })
+    end
+    return ok, logs
+end
+
+function Aureus:logHistory(kind, code, hit, status, detail)
+    table.insert(self.History, 1, {
+        at = now(), kind = kind, code = code,
+        remote = hit and hit.remote.Name or "-",
+        format = hit and hit.format or "-",
+        status = status, detail = detail,
+    })
+    if #self.History > 200 then self.History[#self.History] = nil end
+    self:refreshHistoryUI()
+end
+
+function Aureus:runScript(script)
+    if not self:requireUsername("executing scripts") then return end
+    self:Notify("Executing", (script.name or "script") .. " — running locally...", 3, "info")
+    local ok, logs = self:executeLocal(script.code, true)
+    if self.UI and self.UI.PushLocalLog then
+        for _, entry in ipairs(logs) do
+            entry.at = now()
+            self.UI.PushLocalLog(entry)
+        end
+    end
+    if ok then
+        self:Notify("Script Executed", script.name or "script", 3, "success")
+        self:logHistory("SCRIPT", script.name or "script", nil, "ok", nil)
+    else
+        -- If local failed and a backdoor exists, try SS. Otherwise honest failure.
+        if #self.Hits > 0 then
+            self:Notify("Local Failed", "Trying via server backdoor...", 3, "warning")
+            self:execute(script.code)
+        else
+            self:Notify("Execution Failed",
+                "Local failed and no confirmed backdoor is available.", 4, "error")
+        end
+        self:logHistory("SCRIPT", script.name or "script", nil, "failed", nil)
+    end
+end
+
+-- ========================================================
+-- SCRIPTBLOX — DANGER ANALYSIS
+-- ========================================================
+function Aureus:analyzeDanger(src, meta)
+    if not src or src == "" then return "Unknown", 0, { "No source available" } end
+    local flags, score = {}, 0
+
+    local requireCount = 0
+    for _ in string.gmatch(src, "require%s*%(") do requireCount = requireCount + 1 end
+    if requireCount > 0 then
+        score = score + 25
+        table.insert(flags, ("Uses require() x%d — loads external code"):format(requireCount))
+    end
+    if string.find(src, "loadstring%s*%(") then
+        score = score + 20
+        table.insert(flags, "Uses loadstring() — dynamic code execution")
+    end
+    if string.find(src, "[^%w]load%s*%(") then
+        score = score + 15
+        table.insert(flags, "Uses load() — dynamic chunk loading")
+    end
+    if string.find(src, "getfenv") or string.find(src, "setfenv") then
+        score = score + 20
+        table.insert(flags, "Uses getfenv/setfenv — environment manipulation")
+    end
+    local httpCount = 0
+    for _ in string.gmatch(src, "HttpGet%s*%(") do httpCount = httpCount + 1 end
+    for _ in string.gmatch(src, "HttpPost%s*%(") do httpCount = httpCount + 1 end
+    for _ in string.gmatch(src, "request%s*%(") do httpCount = httpCount + 1 end
+    if httpCount > 0 then
+        score = score + 15
+        table.insert(flags, ("Uses HTTP x%d — network access"):format(httpCount))
+    end
+    local obfPatterns = {
+        "string%.char%s*%(%s*%d+%s*,%s*%d+%s*,%s*%d+",
+        "\\x%x%x\\x%x%x\\x%x%x",
+        "table%.concat%s*%(%s*{%s*%d+%s*,%s*%d+",
+        "for%s+%w+%s*=%s*%d+%s*,%s*#%w+%s+do%s+%w+%s*=%s*%w+%s*%.%.%s*",
+    }
+    local obfMatches = 0
+    for _, pat in ipairs(obfPatterns) do
+        if string.find(src, pat) then obfMatches = obfMatches + 1 end
+    end
+    if obfMatches >= 2 then
+        score = score + 30
+        table.insert(flags, "Heavy obfuscation detected — code is intentionally hidden")
+    elseif obfMatches == 1 then
+        score = score + 10
+        table.insert(flags, "Possible obfuscation — some code is encoded")
+    end
+    if meta and meta.key then
+        score = score + 5
+        table.insert(flags, "Requires a key system")
+    end
+    if meta and meta.isPatched then
+        score = score + 5
+        table.insert(flags, "Marked as patched")
+    end
+    if #flags == 0 then
+        table.insert(flags, "No suspicious patterns detected in source")
+    end
+
+    local level
+    if score >= 60 then level = "Critical"
+    elseif score >= 40 then level = "High"
+    elseif score >= 20 then level = "Medium"
+    elseif score > 0 then level = "Low"
+    else level = "Safe" end
+    return level, score, flags
+end
+
+local function dangerStyle(level)
+    if level == "Critical" then return C.Error, "☠" end
+    if level == "High"     then return Color3.fromRGB(230, 120, 60), "⚠" end
+    if level == "Medium"   then return C.Warning, "!" end
+    if level == "Low"      then return C.Info, "i" end
+    if level == "Safe"     then return C.Success, "✓" end
+    return C.SubText, "?"
+end
+
+-- ========================================================
+-- SCRIPTBLOX — FETCH
+-- ========================================================
+function Aureus:fetchScriptBlox(query, page)
+    if self.ScriptBlox.Loading then return end
+    self.ScriptBlox.Loading = true
+    self.ScriptBlox.Page = page or 1
+
+    local f = self.ScriptBlox.Filters
+    local params = {
+        ("page=%d"):format(self.ScriptBlox.Page),
+        ("max=%d"):format(self.ScriptBlox.MaxPerPage),
+        ("sortBy=%s"):format(f.sortBy),
+        ("order=%s"):format(f.order),
+    }
+    if f.mode ~= ""      then table.insert(params, "mode=" .. f.mode) end
+    if f.verified ~= ""  then table.insert(params, "verified=" .. f.verified) end
+    if f.key ~= ""       then table.insert(params, "key=" .. f.key) end
+    if f.universal ~= "" then table.insert(params, "universal=" .. f.universal) end
+    if f.patched ~= ""   then table.insert(params, "patched=" .. f.patched) end
+
+    local q = query or f.search
+    local url
+    if q and q ~= "" then
+        url = ("%s/script/search?q=%s&%s"):format(
+            self.ScriptBlox.BaseUrl, HttpService:UrlEncode(q), table.concat(params, "&"))
+    else
+        url = ("%s/script/fetch?%s"):format(self.ScriptBlox.BaseUrl, table.concat(params, "&"))
+    end
+
+    self:Notify("ScriptBlox", "Fetching scripts...", 2, "info")
+
+    task.spawn(function()
+        local ok, result = pcall(function() return game:HttpGet(url, true) end)
+        self.ScriptBlox.Loading = false
+        if not ok or not result then
+            self:Notify("ScriptBlox", "Network error — could not reach API.", 4, "error")
+            return
+        end
+        local decodeOk, data = pcall(function() return HttpService:JSONDecode(result) end)
+        if not decodeOk or not data then
+            self:Notify("ScriptBlox", "Invalid API response.", 4, "error")
+            return
+        end
+        if data.message then
+            self:Notify("ScriptBlox", "API error: " .. data.message, 4, "error")
+            return
+        end
+        local scripts = data.result and data.result.scripts
+        if not scripts then
+            self:Notify("ScriptBlox", "No scripts returned.", 3, "warning")
+            return
+        end
+        self.ScriptBlox.Results = scripts
+        self.ScriptBlox.TotalPages = data.result.totalPages or 1
+        self:Notify("ScriptBlox",
+            ("%d script(s) loaded (page %d/%d)"):format(#scripts, self.ScriptBlox.Page, self.ScriptBlox.TotalPages),
+            3, "success")
+        if self.UI and self.UI.RenderScriptBlox then
+            self.UI.RenderScriptBlox()
+        end
+    end)
+end
+
+function Aureus:fetchScriptBloxDetail(slug, callback)
+    local url = ("%s/script/%s"):format(self.ScriptBlox.BaseUrl, slug)
+    task.spawn(function()
+        local ok, result = pcall(function() return game:HttpGet(url, true) end)
+        if not ok or not result then callback(nil); return end
+        local decodeOk, data = pcall(function() return HttpService:JSONDecode(result) end)
+        if not decodeOk or not data or not data.script then callback(nil); return end
+        callback(data.script)
+    end)
+end
+
+-- ========================================================
+-- MAIN UI
+-- ========================================================
+local ScreenGui = Create("ScreenGui", {
+    Name = "AureusHub", ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = CoreGui,
+})
+
+-- ==================== STARTUP LOGO ====================
+local splashHolder = Create("Frame", {
+    Name = "AureusStartupLogo",
+    Size = UDim2.new(0, 140, 0, 140),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundTransparency = 1, ZIndex = 50, Parent = ScreenGui,
+})
+local splashImage = Create("ImageLabel", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Image = "",
+    ImageTransparency = 1,
+    ImageColor3 = Color3.new(1, 1, 1),
+    ScaleType = Enum.ScaleType.Fit, ZIndex = 50, Parent = splashHolder,
+})
+applyImageWithFallback(splashImage, Aureus.Config.Assets.SplashLogo, C.Accent)
+
+TweenService:Create(splashImage, TweenInfo.new(0.55, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+    ImageTransparency = 0,
+}):Play()
+TweenService:Create(splashHolder, TweenInfo.new(0.7, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+    Size = UDim2.new(0, 220, 0, 220),
+}):Play()
+
+task.delay(1.8, function()
+    local dockTween = TweenService:Create(splashHolder, TweenInfo.new(1.1, Enum.EasingStyle.Quart, Enum.EasingDirection.InOut), {
+        Position = UDim2.new(0, 52, 1, -52),
+        Size = UDim2.new(0, 56, 0, 56),
+    })
+    dockTween:Play()
+    dockTween.Completed:Connect(function()
+        splashHolder.ZIndex = 12
+        splashImage.ZIndex = 12
+        task.spawn(function()
+            while splashHolder.Parent do
+                TweenService:Create(splashImage, TweenInfo.new(1.6, Enum.EasingStyle.Sine), {
+                    ImageTransparency = 0.2,
+                }):Play()
+                task.wait(1.6)
+                TweenService:Create(splashImage, TweenInfo.new(1.6, Enum.EasingStyle.Sine), {
+                    ImageTransparency = 0,
+                }):Play()
+                task.wait(1.6)
+            end
+        end)
+    end)
+end)
+
+-- Login
+local LoginFrame = Create("Frame", {
+    Name = "LoginScreen",
+    Size = UDim2.new(0, 400, 0, 280),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundColor3 = C.Background, BorderSizePixel = 0,
+    ZIndex = 20, Parent = ScreenGui,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = LoginFrame })
+Create("UIStroke", { Color = C.Accent, Thickness = 1, Parent = LoginFrame })
+Create("TextLabel", {
+    Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 20),
+    BackgroundTransparency = 1, Text = "Aureus",
+    TextColor3 = C.Accent, Font = Aureus.Config.Font, TextSize = 32,
+    TextXAlignment = Enum.TextXAlignment.Center, Parent = LoginFrame,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, -40, 0, 20), Position = UDim2.new(0, 20, 0, 60),
+    BackgroundTransparency = 1, Text = "Press enter to open the dashboard",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, Parent = LoginFrame,
+})
+local KeyInput = Create("TextBox", {
+    Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 100),
+    BackgroundColor3 = C.Card, PlaceholderText = "Any value...", Text = "",
+    TextColor3 = C.Text, Font = Aureus.Config.FontCode, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = LoginFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = KeyInput })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = KeyInput })
+local LoginBtn = Create("TextButton", {
+    Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 160),
+    BackgroundColor3 = C.Accent, Text = "Open Dashboard",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 14, Parent = LoginFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = LoginBtn })
+local LoginStatus = Create("TextLabel", {
+    Size = UDim2.new(1, -40, 0, 20), Position = UDim2.new(0, 20, 0, 210),
+    BackgroundTransparency = 1, Text = "",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 11, TextXAlignment = Enum.TextXAlignment.Center, Parent = LoginFrame,
+})
+
+-- Main Frame
+local MainFrame = Create("Frame", {
+    Name = "MainFrame",
+    Size = UDim2.new(0, 800, 0, 500),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundColor3 = C.Background, BorderSizePixel = 0,
+    Visible = false, Parent = ScreenGui,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = MainFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = MainFrame })
+
+local TopBar = Create("Frame", {
+    Name = "TopBar", Size = UDim2.new(1, 0, 0, 40),
+    BackgroundTransparency = 1, Parent = MainFrame,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 20, 0, 0),
+    BackgroundTransparency = 1,
+    Text = "Ready to script, " .. LocalPlayer.Name .. "?",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 16,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = TopBar,
+})
+local CloseBtn = Create("TextButton", {
+    Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -40, 0, 5),
+    BackgroundColor3 = C.Card, Text = "X", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 14, Parent = TopBar,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CloseBtn })
+
+-- Sidebar
+local Sidebar = Create("Frame", {
+    Name = "Sidebar", Size = UDim2.new(0, 180, 1, -40),
+    Position = UDim2.new(0, 0, 0, 40),
+    BackgroundColor3 = C.Sidebar, BorderSizePixel = 0, Parent = MainFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = Sidebar })
+
+local LogoFrame = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, Parent = Sidebar,
+})
+local sidebarLogo = Create("ImageLabel", {
+    Name = "AureusLogo",
+    Size = UDim2.new(0, 26, 0, 26),
+    Position = UDim2.new(0, 12, 0.5, -13),
+    BackgroundTransparency = 1,
+    Image = "",
+    ImageColor3 = Color3.new(1, 1, 1),
+    ScaleType = Enum.ScaleType.Fit, Parent = LogoFrame,
+})
+applyImageWithFallback(sidebarLogo, Aureus.Config.Assets.SidebarLogo, C.Accent)
+
+Create("TextLabel", {
+    Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 44, 0, 0),
+    BackgroundTransparency = 1, Text = "Aureus",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 20,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = LogoFrame,
+})
+
+local ListFrame = Create("Frame", {
+    Size = UDim2.new(1, 0, 1, -100), Position = UDim2.new(0, 0, 0, 50),
+    BackgroundTransparency = 1, Parent = Sidebar,
+})
+Create("UIListLayout", {
+    Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, Parent = ListFrame,
+})
+
+local CurrentTab, Tabs, TabButtons = nil, {}, {}
+
+local function SwitchTab(tabName)
+    if CurrentTab == tabName then return end
+    if CurrentTab and Tabs[CurrentTab] then Tabs[CurrentTab].Visible = false end
+    for name, btn in pairs(TabButtons) do
+        local txt = btn:FindFirstChild("TextLabel")
+        local icon = btn:FindFirstChild("ImageLabel")
+        if name == tabName then
+            TweenService:Create(txt, TweenInfo.new(0.3), { TextColor3 = C.Accent }):Play()
+            if icon then TweenService:Create(icon, TweenInfo.new(0.3), { ImageColor3 = C.Accent }):Play() end
+            TweenService:Create(btn, TweenInfo.new(0.3), { BackgroundTransparency = 0.85, BackgroundColor3 = C.Card }):Play()
+        else
+            TweenService:Create(txt, TweenInfo.new(0.3), { TextColor3 = C.SubText }):Play()
+            if icon then TweenService:Create(icon, TweenInfo.new(0.3), { ImageColor3 = C.SubText }):Play() end
+            TweenService:Create(btn, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+        end
+    end
+    CurrentTab = tabName
+    if Tabs[tabName] then
+        local nt = Tabs[tabName]
+        nt.Visible = true
+        nt.Position = UDim2.new(0, 15, 0, 0)
+        TweenService:Create(nt, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 0, 0, 0),
+        }):Play()
+    end
+    Aureus:LogActivity("tab_switch", tabName)
+end
+Aureus.SwitchTab = SwitchTab
+
+local function CreateSidebarButton(name, displayName, icon, order)
+    local Btn = Create("TextButton", {
+        Name = name, Size = UDim2.new(1, -20, 0, 35),
+        BackgroundColor3 = C.Sidebar, BackgroundTransparency = 1,
+        Text = "", LayoutOrder = order, Parent = ListFrame,
+    })
+    local Icon = Create("ImageLabel", {
+        Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(0, 12, 0.5, -9),
+        BackgroundTransparency = 1, Image = icon,
+        ImageColor3 = C.SubText, Parent = Btn,
+    })
+    local Text = Create("TextLabel", {
+        Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 40, 0, 0),
+        BackgroundTransparency = 1, Text = displayName,
+        TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+        TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = Btn,
+    })
+    Btn.MouseEnter:Connect(function()
+        if CurrentTab ~= name then
+            TweenService:Create(Btn, TweenInfo.new(0.2), { BackgroundTransparency = 0.8 }):Play()
+            TweenService:Create(Text, TweenInfo.new(0.2), { TextColor3 = C.Text }):Play()
+            TweenService:Create(Icon, TweenInfo.new(0.2), { ImageColor3 = C.Text }):Play()
+        end
+    end)
+    Btn.MouseLeave:Connect(function()
+        if CurrentTab ~= name then
+            TweenService:Create(Btn, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+            TweenService:Create(Text, TweenInfo.new(0.2), { TextColor3 = C.SubText }):Play()
+            TweenService:Create(Icon, TweenInfo.new(0.2), { ImageColor3 = C.SubText }):Play()
+        end
+    end)
+    Btn.MouseButton1Click:Connect(function() SwitchTab(name) end)
+    TabButtons[name] = Btn
+    return Btn
+end
+
+local Icons = {
+    Dashboard  = "rbxassetid://10734950309",
+    Games      = "rbxassetid://10734898355",
+    Executor   = "rbxassetid://10734950847",
+    SSExecutor = "rbxassetid://10734950847",
+    Scripts    = "rbxassetid://10734947595",
+    History    = "rbxassetid://10734949294",
+    Referrals  = "rbxassetid://10734951673",
+    Settings   = "rbxassetid://10734949294",
+}
+
+CreateSidebarButton("Dashboard",  "Dashboard",   Icons.Dashboard,  1)
+CreateSidebarButton("Games",      "Games",       Icons.Games,      2)
+CreateSidebarButton("Executor",   "Executor",    Icons.Executor,   3)
+CreateSidebarButton("SSExecutor", "SS Executor", Icons.SSExecutor, 4)
+CreateSidebarButton("Scripts",    "Scripts",     Icons.Scripts,    5)
+CreateSidebarButton("History",    "History",     Icons.History,    6)
+CreateSidebarButton("Referrals",  "Referrals",   Icons.Referrals,  7)
+CreateSidebarButton("Settings",   "Settings",    Icons.Settings,   8)
+
+local LogoutBtn = Create("TextButton", {
+    Size = UDim2.new(0, 140, 0, 35), Position = UDim2.new(0.5, -70, 1, -50),
+    BackgroundColor3 = C.Accent, Text = "Log Out",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 13, Parent = Sidebar,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = LogoutBtn })
+LogoutBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    task.wait(0.3)
+    LoginFrame.Visible = true
+    Aureus:LogActivity("logout", "")
+end)
+
+-- Content
+local Content = Create("Frame", {
+    Name = "Content", Size = UDim2.new(1, -190, 1, -50),
+    Position = UDim2.new(0, 190, 0, 40),
+    BackgroundTransparency = 1, Parent = MainFrame,
+})
+
+local DotsLayer = Create("Frame", {
+    Name = "DotsBg", Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1, ClipsDescendants = true,
+    ZIndex = 0, Parent = Content,
+})
+local function spawnDot()
+    local size = math.random(3, 7)
+    local dot = Create("Frame", {
+        Size = UDim2.new(0, size, 0, size),
+        Position = UDim2.new(math.random(), 0, -0.05, 0),
+        BackgroundColor3 = C.Accent,
+        BackgroundTransparency = math.random(30, 70) / 100,
+        BorderSizePixel = 0, ZIndex = 0, Parent = DotsLayer,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = dot })
+    local dur = math.random(6, 12)
+    local t = TweenService:Create(dot, TweenInfo.new(dur, Enum.EasingStyle.Linear), {
+        Position = UDim2.new(dot.Position.X.Scale, 0, 1.05, 0),
+    })
+    t:Play()
+    t.Completed:Connect(function() dot:Destroy() end)
+end
+task.spawn(function()
+    while MainFrame.Parent do
+        if MainFrame.Visible then
+            for _ = 1, math.random(1, 3) do spawnDot() end
+        end
+        task.wait(0.7)
+    end
+end)
+
+local function CreateTab(name, scrolling)
+    local frame = Create("Frame", {
+        Name = name .. "Tab", Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1, Visible = false,
+        ZIndex = 2, Parent = Content,
+    })
+    if scrolling then
+        local scroll = Create("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+            CanvasSize = UDim2.new(0, 0, 0, 1200),
+            ScrollBarThickness = 4,
+            ScrollBarImageColor3 = C.Accent, ScrollBarImageTransparency = 0.5,
+            ZIndex = 2, Parent = frame,
+        })
+        Tabs[name] = frame
+        return scroll
+    end
+    Tabs[name] = frame
+    return frame
+end
+
+-- ==================== DASHBOARD ====================
+local DashboardTab = CreateTab("Dashboard", true)
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
+    Text = "Ready to script, " .. LocalPlayer.Name .. "?",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = DashboardTab,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 30),
+    BackgroundTransparency = 1,
+    Text = "Set your username below before executing anything",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = DashboardTab,
+})
+local LinkFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 80), Position = UDim2.new(0, 0, 0, 70),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = DashboardTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = LinkFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = LinkFrame })
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 15, 0, 10),
+    BackgroundTransparency = 1, Text = "Set Your Roblox Username",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = LinkFrame,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 15, 0, 30),
+    BackgroundTransparency = 1,
+    Text = "Required before executing scripts or using server-side features.",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Parent = LinkFrame,
+})
+local LinkInput = Create("TextBox", {
+    Size = UDim2.new(0.6, -20, 0, 30), Position = UDim2.new(0, 15, 0, 45),
+    BackgroundColor3 = C.Background, Text = LocalPlayer.Name,
+    TextColor3 = C.Text, Font = Aureus.Config.FontRegular,
+    TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = LinkFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = LinkInput })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = LinkInput })
+local LinkBtn = Create("TextButton", {
+    Size = UDim2.new(0.4, -20, 0, 30), Position = UDim2.new(0.6, 0, 0, 45),
+    BackgroundColor3 = C.Accent, Text = "Set Account",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = LinkFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = LinkBtn })
+LinkBtn.MouseButton1Click:Connect(function()
+    local name = LinkInput.Text
+    if name and name ~= "" then
+        Aureus.Username = name
+        Aureus:Notify("Account Linked",
+            "Welcome, " .. name .. "! You can now execute scripts.", 4, "success")
+    else
+        Aureus:Notify("Warning", "Please enter a valid username.", 3, "warning")
+    end
+end)
+
+local function CreateStatCard(posX, title, valueFn, subText, isLive)
+    local Card = Create("Frame", {
+        Size = UDim2.new(0, 190, 0, 100), Position = UDim2.new(0, posX, 0, 300),
+        BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = DashboardTab,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = Card })
+    Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = Card })
+    Create("TextLabel", {
+        Size = UDim2.new(1, -30, 0, 20), Position = UDim2.new(0, 15, 0, 15),
+        BackgroundTransparency = 1, Text = title,
+        TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+        TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = Card,
+    })
+    local valueLabel = Create("TextLabel", {
+        Size = UDim2.new(1, -30, 0, 40), Position = UDim2.new(0, 15, 0, 45),
+        BackgroundTransparency = 1, Text = "0",
+        TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 28,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = Card,
+    })
+    Create("TextLabel", {
+        Size = UDim2.new(1, -30, 0, 20), Position = UDim2.new(0, 15, 0, 75),
+        BackgroundTransparency = 1, Text = subText,
+        TextColor3 = isLive and C.Accent or C.SubText,
+        Font = Aureus.Config.FontRegular, TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Right, Parent = Card,
+    })
+    task.spawn(function()
+        while valueLabel.Parent do
+            valueLabel.Text = tostring(valueFn())
+            task.wait(0.5)
+        end
+    end)
+end
+CreateStatCard(0,   "Backdoors Found",   function() return #Aureus.Hits end,     "Live", true)
+CreateStatCard(205, "Executions Logged", function() return #Aureus.History end,  "Live", true)
+CreateStatCard(410, "Local Log Lines",   function() return #Aureus.LocalLog end, "Live", true)
+
+-- ==================== GAMES ====================
+local GamesTab = CreateTab("Games", false)
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
+    Text = "Game Vulnerability Check", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = GamesTab,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 30),
+    BackgroundTransparency = 1,
+    Text = "Scans the current game for a loadstring backdoor. Real results only.",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular, TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = GamesTab,
+})
+
+local GameInfoFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 70), Position = UDim2.new(0, 0, 0, 60),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = GamesTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = GameInfoFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = GameInfoFrame })
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 15, 0, 10),
+    BackgroundTransparency = 1, Text = "CURRENT GAME",
+    TextColor3 = C.Accent, Font = Aureus.Config.Font, TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = GameInfoFrame,
+})
+local GameNameLabel = Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 15, 0, 28),
+    BackgroundTransparency = 1,
+    Text = (game.PlaceId ~= 0) and ("PlaceId: " .. game.PlaceId) or "Unknown place",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = GameInfoFrame,
+})
+task.spawn(function()
+    if game.PlaceId == 0 then return end
+    local ok, res = pcall(function()
+        return game:HttpGet("https://games.roblox.com/v1/games?universeIds=" .. game.GameId)
+    end)
+    if ok and res then
+        local decodeOk, data = pcall(function() return HttpService:JSONDecode(res) end)
+        if decodeOk and data and data.data and data.data[1] then
+            GameNameLabel.Text = data.data[1].name .. "  •  PlaceId: " .. game.PlaceId
+        end
+    end
+end)
+
+local StatusPanel = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 90), Position = UDim2.new(0, 0, 0, 140),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = GamesTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = StatusPanel })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = StatusPanel })
+local StatusIcon = Create("Frame", {
+    Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0, 20, 0.5, -25),
+    BackgroundColor3 = C.SubText, BorderSizePixel = 0, Parent = StatusPanel,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 25), Parent = StatusIcon })
+local StatusBig = Create("TextLabel", {
+    Size = UDim2.new(1, -100, 0, 24), Position = UDim2.new(0, 90, 0, 15),
+    BackgroundTransparency = 1, Text = "Not checked yet",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 18,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = StatusPanel,
+})
+local StatusSmall = Create("TextLabel", {
+    Size = UDim2.new(1, -100, 0, 40), Position = UDim2.new(0, 90, 0, 40),
+    BackgroundTransparency = 1,
+    Text = "Click CHECK GAME to scan this game's remotes for a loadstring backdoor.",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular, TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, Parent = StatusPanel,
+})
+local CheckBtn = Create("TextButton", {
+    Size = UDim2.new(0, 160, 0, 36), Position = UDim2.new(0, 0, 0, 245),
+    BackgroundColor3 = C.Accent, Text = "CHECK GAME",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 13, Parent = GamesTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CheckBtn })
+local StopCheckBtn = Create("TextButton", {
+    Size = UDim2.new(0, 90, 0, 36), Position = UDim2.new(0, 170, 0, 245),
+    BackgroundColor3 = C.Card, Text = "STOP",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = GamesTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = StopCheckBtn })
+StopCheckBtn.MouseButton1Click:Connect(function() Aureus:stopScan() end)
+local ExecNowBtn = Create("TextButton", {
+    Size = UDim2.new(0, 160, 0, 36), Position = UDim2.new(0, 270, 0, 245),
+    BackgroundColor3 = C.Background, Text = "Go to SS Executor",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = GamesTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ExecNowBtn })
+ExecNowBtn.MouseButton1Click:Connect(function() SwitchTab("SSExecutor") end)
+
+local ResultList = Create("ScrollingFrame", {
+    Size = UDim2.new(1, -20, 1, -300), Position = UDim2.new(0, 0, 0, 295),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0,
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4, ScrollBarImageColor3 = C.Accent,
+    ScrollBarImageTransparency = 0.4, Parent = GamesTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = ResultList })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ResultList })
+Create("UIListLayout", { Padding = UDim.new(0, 6), Parent = ResultList })
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 18), BackgroundTransparency = 1,
+    Text = "  RESULTS", TextColor3 = C.SubText,
+    Font = Aureus.Config.Font, TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = ResultList,
+})
+local ResultsEmpty = Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 40), BackgroundTransparency = 1,
+    Text = "No results yet.", TextColor3 = C.SubText,
+    Font = Aureus.Config.FontRegular, TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Center, Parent = ResultList,
+})
+
+local function setStatus(state, bigText, smallText)
+    local colors = {
+        idle = C.SubText, scanning = C.Warning, safe = C.Success,
+        vuln = C.Accent, error = C.Error,
+    }
+    local col = colors[state] or C.SubText
+    StatusBig.Text = bigText
+    StatusBig.TextColor3 = col
+    StatusSmall.Text = smallText
+    TweenService:Create(StatusIcon, TweenInfo.new(0.25), { BackgroundColor3 = col }):Play()
+end
+
+local function renderGameResults(hits)
+    for _, c in ipairs(ResultList:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end
+    end
+    ResultsEmpty.Visible = #hits == 0
+    local y = 0
+    for i, hit in ipairs(hits) do
+        local row = Create("TextButton", {
+            Size = UDim2.new(1, -16, 0, 56), Position = UDim2.new(0, 8, 0, y + 22),
+            BackgroundColor3 = C.Background, Text = "",
+            BorderSizePixel = 0, Parent = ResultList,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = row })
+        Create("UIStroke", { Color = C.Success, Thickness = 1, Parent = row })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 10, 0, 6),
+            BackgroundTransparency = 1,
+            Text = ("#%d  %s"):format(i, hit.remote.Name),
+            TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 12), Position = UDim2.new(0, 10, 0, 24),
+            BackgroundTransparency = 1,
+            Text = "format: " .. hit.format .. "   •   " .. hit.remoteClass,
+            TextColor3 = C.Success, Font = Aureus.Config.FontCode, TextSize = 10,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 12), Position = UDim2.new(0, 10, 0, 38),
+            BackgroundTransparency = 1, Text = shortPath(hit.path),
+            TextColor3 = C.SubText, Font = Aureus.Config.FontCode, TextSize = 9,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        row.MouseButton1Click:Connect(function()
+            Aureus.selectedHit = hit
+            Aureus:refreshHitUI()
+            Aureus:Notify("Selected", "Backdoor #" .. i .. " selected.", 2, "success")
+        end)
+        y = y + 62
+    end
+    ResultList.CanvasSize = UDim2.new(0, 0, 0, y + 30)
+end
+
+CheckBtn.MouseButton1Click:Connect(function()
+    if Aureus.Running then
+        Aureus:Notify("Check", "A scan is already running.", 3, "warning")
+        return
+    end
+    setStatus("scanning", "Scanning...", "Enumerating remotes and probing payloads.")
+    ResultsEmpty.Visible = true
+    ResultsEmpty.Text = "Scanning..."
+    task.spawn(function()
+        Aureus:scan()
+        while Aureus.Running do task.wait(0.15) end
+        if #Aureus.Hits == 0 then
+            setStatus("safe", "No backdoor detected",
+                "This game does not expose a loadstring backdoor.")
+            ResultsEmpty.Text = "Game is not vulnerable to this vector."
+        else
+            setStatus("vuln", ("Vulnerable — %d backdoor(s) found"):format(#Aureus.Hits),
+                "This game exposes a loadstring backdoor.")
+            renderGameResults(Aureus.Hits)
+        end
+    end)
+end)
+
+-- ==================== EXECUTOR ====================
+local ExecutorTab = CreateTab("Executor", false)
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
+    Text = "Script Executor", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = ExecutorTab,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 30),
+    BackgroundTransparency = 1, Text = "Execute custom Lua scripts in-game",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = ExecutorTab,
+})
+
+local ManagerFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 1, -190), Position = UDim2.new(0, 0, 0, 60),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = ExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = ManagerFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ManagerFrame })
+
+local MgrHeader = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Parent = ManagerFrame,
+})
+Create("TextLabel", {
+    Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(0, 14, 0.5, -9),
+    BackgroundTransparency = 1, Text = "</>",
+    TextColor3 = C.Accent, Font = Aureus.Config.Font, TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = MgrHeader,
+})
+Create("TextLabel", {
+    Size = UDim2.new(0, 120, 1, 0), Position = UDim2.new(0, 36, 0, 0),
+    BackgroundTransparency = 1, Text = "Script Manager",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = MgrHeader,
+})
+local function MakeMgrPill(x, text, active)
+    local p = Create("TextButton", {
+        Size = UDim2.new(0, 90, 0, 26), Position = UDim2.new(0, x, 0.5, -13),
+        BackgroundColor3 = active and C.Accent or C.Background,
+        BackgroundTransparency = active and 0 or 0.4,
+        Text = text, TextColor3 = C.Text,
+        Font = Aureus.Config.Font, TextSize = 11, Parent = MgrHeader,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 13), Parent = p })
+    return p
+end
+MakeMgrPill(150, "Scripts", true)
+MakeMgrPill(250, "Favorites", false)
+
+local PlusBtn = Create("TextButton", {
+    Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(1, -40, 0.5, -13),
+    BackgroundColor3 = C.Background, Text = "+",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 16, Parent = MgrHeader,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = PlusBtn })
+
+local TabStrip = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 36), Position = UDim2.new(0, 0, 0, 40),
+    BackgroundTransparency = 1, Parent = ManagerFrame,
+})
+local Script1Pill = Create("TextButton", {
+    Size = UDim2.new(0, 100, 0, 28), Position = UDim2.new(0, 14, 0.5, -14),
+    BackgroundColor3 = C.Background, Text = "Script 1",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = TabStrip,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Script1Pill })
+Create("UIStroke", { Color = C.Accent, Thickness = 1, Parent = Script1Pill })
+
+local CodeArea = Create("Frame", {
+    Size = UDim2.new(1, -16, 1, -130), Position = UDim2.new(0, 8, 0, 82),
+    BackgroundColor3 = C.Background, BorderSizePixel = 0, Parent = ManagerFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CodeArea })
+Create("TextLabel", {
+    Size = UDim2.new(0, 24, 0, 18), Position = UDim2.new(0, 4, 0, 4),
+    BackgroundTransparency = 1, Text = "1",
+    TextColor3 = C.Border, Font = Aureus.Config.FontCode, TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Center, Parent = CodeArea,
+})
+local ScriptBox = Create("TextBox", {
+    Size = UDim2.new(1, -34, 1, -8), Position = UDim2.new(0, 30, 0, 4),
+    BackgroundTransparency = 1,
+    Text = '-- Client-side script\nprint("hello from " .. game.Players.LocalPlayer.Name)',
+    TextColor3 = C.Text, Font = Aureus.Config.FontCode, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    ClearTextOnFocus = false, MultiLine = true, Parent = CodeArea,
+})
+
+local BottomRow = Create("Frame", {
+    Size = UDim2.new(1, -16, 0, 40), Position = UDim2.new(0, 8, 1, -48),
+    BackgroundTransparency = 1, Parent = ManagerFrame,
+})
+local ExecuteBtn = Create("TextButton", {
+    Size = UDim2.new(0.55, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+    BackgroundColor3 = C.Accent, Text = "  ▶  Execute",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 13, Parent = BottomRow,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ExecuteBtn })
+local function MakeIconBtn(x, glyph)
+    local b = Create("TextButton", {
+        Size = UDim2.new(0, 40, 1, 0), Position = UDim2.new(0, x, 0, 0),
+        BackgroundColor3 = C.Background, Text = glyph,
+        TextColor3 = C.SubText, Font = Aureus.Config.Font,
+        TextSize = 15, Parent = BottomRow,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = b })
+    return b
+end
+local TrashBtn  = MakeIconBtn(340, "🗑")
+local WandBtn   = MakeIconBtn(388, "✦")
+local SwapBtn   = MakeIconBtn(436, "⇄")
+local PopOutBtn = MakeIconBtn(484, "↗")
+TrashBtn.MouseButton1Click:Connect(function() ScriptBox.Text = "" end)
+WandBtn.MouseButton1Click:Connect(function()
+    ScriptBox.Text = '-- Beautify is a no-op here.\n' .. ScriptBox.Text
+end)
+
+local ConsoleCard = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 110), Position = UDim2.new(0, 0, 1, -120),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = ExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = ConsoleCard })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ConsoleCard })
+Create("TextLabel", {
+    Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(0, 14, 0, 10),
+    BackgroundTransparency = 1, Text = ">_",
+    TextColor3 = C.Accent, Font = Aureus.Config.FontCode,
+    TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = ConsoleCard,
+})
+Create("TextLabel", {
+    Size = UDim2.new(0, 90, 0, 20), Position = UDim2.new(0, 40, 0, 10),
+    BackgroundTransparency = 1, Text = "Console",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = ConsoleCard,
+})
+local ConsoleClear = Create("TextButton", {
+    Size = UDim2.new(0, 60, 0, 20), Position = UDim2.new(1, -72, 0, 10),
+    BackgroundTransparency = 1, Text = "Clear",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 12, Parent = ConsoleCard,
+})
+local LocalConsole = Create("ScrollingFrame", {
+    Size = UDim2.new(1, -20, 1, -40), Position = UDim2.new(0, 10, 0, 36),
+    BackgroundTransparency = 1, CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4, ScrollBarImageColor3 = C.Accent,
+    ScrollBarImageTransparency = 0.4, Parent = ConsoleCard,
+})
+Create("UIListLayout", { Padding = UDim.new(0, 2), Parent = LocalConsole })
+
+local function pushLocalLog(entry)
+    table.insert(Aureus.LocalLog, entry)
+    local color = (entry.level == "error" and C.Error)
+        or (entry.level == "warn" and C.Warning)
+        or (entry.level == "success" and C.Success)
+        or C.Text
+    Create("TextLabel", {
+        Size = UDim2.new(1, -4, 0, 16), BackgroundTransparency = 1,
+        Text = ("[%s] %s"):format(entry.level, entry.msg),
+        TextColor3 = color, Font = Aureus.Config.FontCode, TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = LocalConsole,
+    })
+    local count = 0
+    for _, c in ipairs(LocalConsole:GetChildren()) do
+        if c:IsA("TextLabel") then count = count + 1 end
+    end
+    LocalConsole.CanvasSize = UDim2.new(0, 0, 0, count * 18)
+    LocalConsole.CanvasPosition = Vector2.new(0, LocalConsole.CanvasSize.Y.Offset)
+end
+Aureus.UI = Aureus.UI or {}
+Aureus.UI.PushLocalLog = pushLocalLog
+
+ConsoleClear.MouseButton1Click:Connect(function()
+    for _, c in ipairs(LocalConsole:GetChildren()) do
+        if c:IsA("TextLabel") then c:Destroy() end
+    end
+    Aureus.LocalLog = {}
+    LocalConsole.CanvasSize = UDim2.new(0, 0, 0, 0)
+end)
+
+pushLocalLog({ level = "info", msg = "Executor console initialized", at = now() })
+
+ExecuteBtn.MouseButton1Click:Connect(function()
+    if not Aureus:requireUsername("executing local code") then return end
+    local code = ScriptBox.Text
+    if code == "" then
+        Aureus:Notify("Local", "Nothing to run.", 3, "warning")
+        return
+    end
+    local ok, logs = Aureus:executeLocal(code, true)
+    for _, entry in ipairs(logs) do
+        entry.at = now()
+        pushLocalLog(entry)
+    end
+    if ok then
+        Aureus:Notify("Local", "Executed without errors.", 3, "success")
+        Aureus:logHistory("LOCAL", code, nil, "ok", nil)
+    else
+        Aureus:Notify("Local", "Execution failed — see console.", 4, "error")
+        Aureus:logHistory("LOCAL", code, nil, "failed", nil)
+    end
+end)
+
+-- ==================== SS EXECUTOR ====================
+local SSExecutorTab = CreateTab("SSExecutor", false)
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
+    Text = "Server-Side Executor", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = SSExecutorTab,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 30),
+    BackgroundTransparency = 1,
+    Text = "Beacon-verified. SS only succeeds if the game has a real loadstring backdoor.",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular, TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = SSExecutorTab,
+})
+
+local SSStatusLabel = Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 25), Position = UDim2.new(0, 0, 0, 60),
+    BackgroundColor3 = C.Card,
+    Text = "  Status: idle — no scan run yet.",
+    TextColor3 = C.SubText, Font = Aureus.Config.Font, TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = SSExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = SSStatusLabel })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = SSStatusLabel })
+Aureus.UI.SSStatus = SSStatusLabel
+
+local ScanBtn = Create("TextButton", {
+    Size = UDim2.new(0, 130, 0, 30), Position = UDim2.new(0, 0, 0, 95),
+    BackgroundColor3 = C.Accent, Text = "SCAN",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = SSExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ScanBtn })
+ScanBtn.MouseButton1Click:Connect(function() Aureus:scan() end)
+local StopBtn = Create("TextButton", {
+    Size = UDim2.new(0, 90, 0, 30), Position = UDim2.new(0, 140, 0, 95),
+    BackgroundColor3 = C.Card, Text = "STOP",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = SSExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = StopBtn })
+StopBtn.MouseButton1Click:Connect(function() Aureus:stopScan() end)
+local ClearHitsBtn = Create("TextButton", {
+    Size = UDim2.new(0, 110, 0, 30), Position = UDim2.new(0, 240, 0, 95),
+    BackgroundColor3 = C.Card, Text = "CLEAR HITS",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = SSExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ClearHitsBtn })
+ClearHitsBtn.MouseButton1Click:Connect(function()
+    Aureus.Hits = {}
+    Aureus.selectedHit = nil
+    Aureus:refreshHitUI()
+    Aureus:Notify("Hits", "Cleared.", 2, "info")
+end)
+
+local HitFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 140), Position = UDim2.new(0, 0, 0, 135),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = SSExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = HitFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = HitFrame })
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 12, 0, 6),
+    BackgroundTransparency = 1, Text = "CONFIRMED BACKDOORS",
+    TextColor3 = C.Accent, Font = Aureus.Config.Font, TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = HitFrame,
+})
+local HitList = Create("ScrollingFrame", {
+    Size = UDim2.new(1, -16, 1, -34), Position = UDim2.new(0, 8, 0, 30),
+    BackgroundTransparency = 1, CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4, ScrollBarImageColor3 = C.Accent,
+    ScrollBarImageTransparency = 0.4, Parent = HitFrame,
+})
+Create("UIListLayout", { Padding = UDim.new(0, 6), Parent = HitList })
+local EmptyHitsLabel = Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1,
+    Text = "No backdoors confirmed. Run a scan.",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, Parent = HitList,
+})
+
+function Aureus:refreshHitUI()
+    if not HitList or not HitList.Parent then return end
+    for _, c in ipairs(HitList:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end
+    end
+    EmptyHitsLabel.Visible = #self.Hits == 0
+    local y = 0
+    for i, hit in ipairs(self.Hits) do
+        local row = Create("TextButton", {
+            Size = UDim2.new(1, -8, 0, 58), Position = UDim2.new(0, 0, 0, y),
+            BackgroundColor3 = (self.selectedHit == hit) and C.CardHover or C.Background,
+            Text = "", BorderSizePixel = 0, Parent = HitList,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = row })
+        Create("UIStroke", {
+            Color = (self.selectedHit == hit) and C.Accent or C.Border,
+            Thickness = 1, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 10, 0, 6),
+            BackgroundTransparency = 1,
+            Text = ("#%d  %s  [%s]"):format(i, hit.remote.Name, hit.remoteClass),
+            TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 12), Position = UDim2.new(0, 10, 0, 24),
+            BackgroundTransparency = 1,
+            Text = "format: " .. hit.format .. "   •   " .. hit.at,
+            TextColor3 = C.Success, Font = Aureus.Config.FontCode, TextSize = 10,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -20, 0, 12), Position = UDim2.new(0, 10, 0, 38),
+            BackgroundTransparency = 1, Text = shortPath(hit.path),
+            TextColor3 = C.SubText, Font = Aureus.Config.FontCode, TextSize = 9,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        row.MouseButton1Click:Connect(function()
+            Aureus.selectedHit = hit
+            Aureus:refreshHitUI()
+            Aureus:Notify("Selected", "Using backdoor #" .. i .. " (" .. hit.format .. ")", 2, "info")
+        end)
+        y = y + 64
+    end
+    HitList.CanvasSize = UDim2.new(0, 0, 0, y)
+end
+
+local SSEditorFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 1, -300), Position = UDim2.new(0, 0, 0, 285),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = SSExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = SSEditorFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = SSEditorFrame })
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 12, 0, 8),
+    BackgroundTransparency = 1,
+    Text = "SERVER-SIDE SCRIPT (pcall-wrapped, errors returned to client)",
+    TextColor3 = C.Accent, Font = Aureus.Config.Font, TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = SSEditorFrame,
+})
+local SSCodeBox = Create("TextBox", {
+    Size = UDim2.new(1, -20, 1, -92), Position = UDim2.new(0, 12, 0, 28),
+    BackgroundTransparency = 1,
+    Text = '-- Runs on the SERVER if a backdoor is confirmed.',
+    TextColor3 = C.Text, Font = Aureus.Config.FontCode, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    ClearTextOnFocus = false, MultiLine = true, Parent = SSEditorFrame,
+})
+local SSExecuteBtn = Create("TextButton", {
+    Size = UDim2.new(0, 170, 0, 32), Position = UDim2.new(0, 12, 1, -42),
+    BackgroundColor3 = C.Accent, Text = "EXECUTE ON SERVER",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 11, Parent = SSEditorFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = SSExecuteBtn })
+SSExecuteBtn.MouseButton1Click:Connect(function() Aureus:execute(SSCodeBox.Text) end)
+local SSClearBtn = Create("TextButton", {
+    Size = UDim2.new(0, 40, 0, 32), Position = UDim2.new(0, 190, 1, -42),
+    BackgroundColor3 = C.Background, Text = "X",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 11, Parent = SSEditorFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = SSClearBtn })
+SSClearBtn.MouseButton1Click:Connect(function() SSCodeBox.Text = "" end)
+
+local ReqFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 60), Position = UDim2.new(0, 0, 1, -75),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = SSExecutorTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = ReqFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ReqFrame })
+Create("TextLabel", {
+    Size = UDim2.new(0, 80, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+    BackgroundTransparency = 1, Text = "ASSET ID",
+    TextColor3 = C.Accent, Font = Aureus.Config.Font, TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = ReqFrame,
+})
+local ReqInput = Create("TextBox", {
+    Size = UDim2.new(1, -290, 0, 30), Position = UDim2.new(0, 90, 0.5, -15),
+    BackgroundColor3 = C.Background, Text = "",
+    PlaceholderText = "e.g. 2780820589",
+    TextColor3 = C.Text, Font = Aureus.Config.FontCode, TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ClearTextOnFocus = false, Parent = ReqFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ReqInput })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ReqInput })
+local ReqBtn = Create("TextButton", {
+    Size = UDim2.new(0, 170, 0, 30), Position = UDim2.new(1, -182, 0.5, -15),
+    BackgroundColor3 = C.Accent, Text = "REQUIRE ON SERVER",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 11, Parent = ReqFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ReqBtn })
+ReqBtn.MouseButton1Click:Connect(function()
+    local id = tonumber(ReqInput.Text:match("%d+") or "")
+    if not id then
+        Aureus:Notify("Require (SS)", "Enter a numeric asset ID.", 4, "warning")
+        return
+    end
+    Aureus:require(id)
+end)
+
+-- ==================== SCRIPTS (with ScriptBlox) ====================
+local ScriptsTab = CreateTab("Scripts", false)
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
+    Text = "Script Hub", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = ScriptsTab,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 30),
+    BackgroundTransparency = 1,
+    Text = "Live ScriptBlox results — author, verified, danger level included",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = ScriptsTab,
+})
+
+local CreateScriptBtn = Create("TextButton", {
+    Size = UDim2.new(1, -20, 0, 40), Position = UDim2.new(0, 0, 0, 60),
+    BackgroundColor3 = C.Accent, Text = "  +  Create Script",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = ScriptsTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CreateScriptBtn })
+CreateScriptBtn.MouseButton1Click:Connect(function()
+    Aureus:Notify("Create Script", "Opens the Executor tab for editing.", 3, "info")
+    SwitchTab("Executor")
+end)
+
+local SearchBox = Create("TextBox", {
+    Size = UDim2.new(1, -20, 0, 36), Position = UDim2.new(0, 0, 0, 108),
+    BackgroundColor3 = C.Card, PlaceholderText = "   Search ScriptBlox...",
+    Text = "", TextColor3 = C.Text, Font = Aureus.Config.FontRegular,
+    TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = ScriptsTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = SearchBox })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = SearchBox })
+Create("TextLabel", {
+    Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(0, 10, 0.5, -9),
+    BackgroundTransparency = 1, Text = "⌕",
+    TextColor3 = C.SubText, Font = Aureus.Config.Font, TextSize = 15, Parent = SearchBox,
+})
+
+local ScopeRow = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 30), Position = UDim2.new(0, 0, 0, 152),
+    BackgroundTransparency = 1, Parent = ScriptsTab,
+})
+local function MakeScopePill(x, text, active, glyph)
+    local b = Create("TextButton", {
+        Size = UDim2.new(0, 140, 0, 30), Position = UDim2.new(0, x, 0, 0),
+        BackgroundColor3 = active and C.Accent or C.Card,
+        Text = glyph .. "  " .. text,
+        TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 12, Parent = ScopeRow,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 15), Parent = b })
+    return b
+end
+local HubPill = MakeScopePill(0,   "ScriptBlox", true,  "◉")
+local MinePill = MakeScopePill(150, "My Scripts", false, "◔")
+
+local CatRow = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 28), Position = UDim2.new(0, 0, 0, 190),
+    BackgroundTransparency = 1, Parent = ScriptsTab,
+})
+local CatPills = {}
+local function MakeCatPill(x, text, glyph)
+    local b = Create("TextButton", {
+        Size = UDim2.new(0, 95, 0, 28), Position = UDim2.new(0, x, 0, 0),
+        BackgroundColor3 = C.Card, Text = glyph .. "  " .. text,
+        TextColor3 = C.Text, Font = Aureus.Config.Font,
+        TextSize = 11, Parent = CatRow,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 14), Parent = b })
+    CatPills[text] = b
+    return b
+end
+MakeCatPill(0,   "All",       "◆")
+MakeCatPill(101, "Free",      "◈")
+MakeCatPill(202, "Verified",  "✓")
+MakeCatPill(303, "Popular",   "⚡")
+
+local function RefreshCatPills(active)
+    for name, b in pairs(CatPills) do
+        TweenService:Create(b, TweenInfo.new(0.15), {
+            BackgroundColor3 = (name == active) and C.Accent or C.Card,
+        }):Play()
+    end
+end
+RefreshCatPills("All")
+
+local ResultsScroll = Create("ScrollingFrame", {
+    Size = UDim2.new(1, -20, 1, -240), Position = UDim2.new(0, 0, 0, 228),
+    BackgroundTransparency = 1, CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4, ScrollBarImageColor3 = C.Accent,
+    ScrollBarImageTransparency = 0.5, Parent = ScriptsTab,
+})
+Create("UIListLayout", { Padding = UDim.new(0, 10), Parent = ResultsScroll })
+
+local function RenderLocalScripts()
+    for _, c in ipairs(ResultsScroll:GetChildren()) do
+        if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
+    end
+    local y = 0
+    Create("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1, Text = "MY SCRIPTS",
+        TextColor3 = C.SubText, Font = Aureus.Config.Font, TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = ResultsScroll,
+    })
+    y = 22
+    for _, s in ipairs(Aureus.Scripts) do
+        local card = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 180), Position = UDim2.new(0, 0, 0, y),
+            BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = ResultsScroll,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = card })
+        Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = card })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -160, 0, 22), Position = UDim2.new(0, 16, 0, 14),
+            BackgroundTransparency = 1, Text = s.name,
+            TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 15,
+            TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, Parent = card,
+        })
+        if s.approved then
+            local app = Create("TextLabel", {
+                Size = UDim2.new(0, 72, 0, 20), Position = UDim2.new(1, -86, 0, 14),
+                BackgroundColor3 = Color3.fromRGB(39, 174, 96), Text = "Approved",
+                TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 10, Parent = card,
+            })
+            Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = app })
+        end
+        Create("TextLabel", {
+            Size = UDim2.new(1, -30, 0, 44), Position = UDim2.new(0, 16, 0, 44),
+            BackgroundTransparency = 1, Text = s.description,
+            TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+            TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, Parent = card,
+        })
+        local exec = Create("TextButton", {
+            Size = UDim2.new(0, 120, 0, 34), Position = UDim2.new(0, 16, 0, 132),
+            BackgroundColor3 = C.Accent, Text = "▶  Execute",
+            TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 11, Parent = card,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = exec })
+        exec.MouseButton1Click:Connect(function() Aureus:runScript(s) end)
+        local view = Create("TextButton", {
+            Size = UDim2.new(0, 120, 0, 34), Position = UDim2.new(0, 146, 0, 132),
+            BackgroundColor3 = C.Background, Text = "◉  View Details",
+            TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 11, Parent = card,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = view })
+        view.MouseButton1Click:Connect(function() Aureus:_showScriptModal(s) end)
+        y = y + 190
+    end
+    ResultsScroll.CanvasSize = UDim2.new(0, 0, 0, y + 20)
+end
+
+local function RenderScriptBlox()
+    for _, c in ipairs(ResultsScroll:GetChildren()) do
+        if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
+    end
+    local results = Aureus.ScriptBlox.Results
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Text = ("SCRIPTBLOX RESULTS  •  page %d/%d"):format(
+            Aureus.ScriptBlox.Page, Aureus.ScriptBlox.TotalPages),
+        TextColor3 = C.SubText, Font = Aureus.Config.Font, TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = ResultsScroll,
+    })
+
+    if #results == 0 then
+        Create("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 60), Position = UDim2.new(0, 0, 0, 22),
+            BackgroundTransparency = 1, Text = "No scripts match your filters.",
+            TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+            TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, Parent = ResultsScroll,
+        })
+        ResultsScroll.CanvasSize = UDim2.new(0, 0, 0, 90)
+        return
+    end
+
+    local y = 22
+    for _, s in ipairs(results) do
+        local card = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 180), Position = UDim2.new(0, 0, 0, y),
+            BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = ResultsScroll,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = card })
+        Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = card })
+
+        local thumb = Create("Frame", {
+            Size = UDim2.new(0, 36, 0, 36), Position = UDim2.new(0, 14, 0, 14),
+            BackgroundColor3 = C.Background, BorderSizePixel = 0, Parent = card,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = thumb })
+        Create("TextLabel", {
+            Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+            Text = "★", TextColor3 = C.Accent,
+            Font = Aureus.Config.Font, TextSize = 16, Parent = thumb,
+        })
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, -200, 0, 22), Position = UDim2.new(0, 60, 0, 14),
+            BackgroundTransparency = 1, Text = s.title or "Untitled",
+            TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 15,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextWrapped = true, Parent = card,
+        })
+
+        if s.verified then
+            local vBadge = Create("TextLabel", {
+                Size = UDim2.new(0, 70, 0, 20), Position = UDim2.new(1, -84, 0, 14),
+                BackgroundColor3 = Color3.fromRGB(39, 174, 96),
+                Text = "✓ Verified",
+                TextColor3 = C.Text, Font = Aureus.Config.Font,
+                TextSize = 10, Parent = card,
+            })
+            Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = vBadge })
+        end
+
+        local author = s.owner and s.owner.username or "Unknown"
+        Create("TextLabel", {
+            Size = UDim2.new(1, -80, 0, 16), Position = UDim2.new(0, 60, 0, 38),
+            BackgroundTransparency = 1,
+            Text = ("by %s  •  ▶ %s views  •  %s"):format(
+                author, formatViews(s.views or 0), (s.createdAt or ""):sub(1, 10)),
+            TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+            TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
+        })
+
+        local tags = {}
+        if s.key then table.insert(tags, "🔑 Key") end
+        if s.isPatched then table.insert(tags, "⛔ Patched") end
+        if s.isUniversal then table.insert(tags, "🌐 Universal") end
+        if s.scriptType then table.insert(tags, "• " .. s.scriptType) end
+        if #tags > 0 then
+            Create("TextLabel", {
+                Size = UDim2.new(1, -80, 0, 16), Position = UDim2.new(0, 60, 0, 56),
+                BackgroundTransparency = 1,
+                Text = table.concat(tags, "   "),
+                TextColor3 = C.Accent, Font = Aureus.Config.FontRegular,
+                TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
+            })
+        end
+
+        Create("TextLabel", {
+            Size = UDim2.new(1, -30, 0, 16), Position = UDim2.new(0, 16, 0, 88),
+            BackgroundTransparency = 1,
+            Text = "View Details for full danger analysis.",
+            TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+            TextStyle = Enum.TextStyle.Italic, Parent = card,
+        })
+
+        local execBtn = Create("TextButton", {
+            Size = UDim2.new(0, 120, 0, 34), Position = UDim2.new(0, 16, 0, 132),
+            BackgroundColor3 = C.Accent, Text = "▶  Execute",
+            TextColor3 = C.Text, Font = Aureus.Config.Font,
+            TextSize = 11, Parent = card,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = execBtn })
+        execBtn.MouseButton1Click:Connect(function()
+            if not Aureus:requireUsername("executing ScriptBlox scripts") then return end
+            Aureus:runScriptBlox(s)
+        end)
+
+        local viewBtn = Create("TextButton", {
+            Size = UDim2.new(0, 120, 0, 34), Position = UDim2.new(0, 146, 0, 132),
+            BackgroundColor3 = C.Background, Text = "◉  View Details",
+            TextColor3 = C.Text, Font = Aureus.Config.Font,
+            TextSize = 11, Parent = card,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = viewBtn })
+        viewBtn.MouseButton1Click:Connect(function()
+            Aureus:_showScriptBloxModal(s)
+        end)
+
+        y = y + 190
+    end
+
+    local pageRow = Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, y),
+        BackgroundTransparency = 1, Parent = ResultsScroll,
+    })
+    local prevBtn = Create("TextButton", {
+        Size = UDim2.new(0, 80, 0, 32), Position = UDim2.new(0, 0, 0, 4),
+        BackgroundColor3 = C.Card, Text = "◀ Prev",
+        TextColor3 = C.Text, Font = Aureus.Config.Font,
+        TextSize = 11, Parent = pageRow,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = prevBtn })
+    prevBtn.MouseButton1Click:Connect(function()
+        if Aureus.ScriptBlox.Page > 1 then
+            Aureus:fetchScriptBlox(nil, Aureus.ScriptBlox.Page - 1)
+        end
+    end)
+
+    Create("TextLabel", {
+        Size = UDim2.new(0, 100, 0, 32), Position = UDim2.new(0.5, -50, 0, 4),
+        BackgroundTransparency = 1,
+        Text = ("Page %d / %d"):format(Aureus.ScriptBlox.Page, Aureus.ScriptBlox.TotalPages),
+        TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+        TextSize = 11, TextXAlignment = Enum.TextXAlignment.Center, Parent = pageRow,
+    })
+
+    local nextBtn = Create("TextButton", {
+        Size = UDim2.new(0, 80, 0, 32), Position = UDim2.new(1, -80, 0, 4),
+        BackgroundColor3 = C.Card, Text = "Next ▶",
+        TextColor3 = C.Text, Font = Aureus.Config.Font,
+        TextSize = 11, Parent = pageRow,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = nextBtn })
+    nextBtn.MouseButton1Click:Connect(function()
+        if Aureus.ScriptBlox.Page < Aureus.ScriptBlox.TotalPages then
+            Aureus:fetchScriptBlox(nil, Aureus.ScriptBlox.Page + 1)
+        end
+    end)
+
+    ResultsScroll.CanvasSize = UDim2.new(0, 0, 0, y + 60)
+end
+Aureus.UI.RenderScriptBlox = RenderScriptBlox
+
+function Aureus:runScriptBlox(s)
+    local wrapper = { name = s.title or "ScriptBlox script", code = s.script or "" }
+    if wrapper.code == "" then
+        self:Notify("ScriptBlox", "No source code available for this script.", 3, "warning")
+        return
+    end
+    self:runScript(wrapper)
+end
+
+function Aureus:_showScriptModal(script)
+    for _, c in ipairs(ModalBody:GetChildren()) do
+        if c:IsA("TextLabel") then c:Destroy() end
+    end
+    ModalTitle.Text = script.name
+    local lineCount = 0
+    for line in string.gmatch(script.code .. "\n", "([^\n]*)\n") do
+        Create("TextLabel", {
+            Size = UDim2.new(1, -4, 0, 18), BackgroundTransparency = 1,
+            Text = line, TextColor3 = Color3.fromRGB(200, 90, 90),
+            Font = Aureus.Config.FontCode, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 42, Parent = ModalBody,
+        })
+        lineCount = lineCount + 1
+    end
+    ModalBody.CanvasSize = UDim2.new(0, 0, 0, 24 * lineCount)
+    ModalGui.Visible = true
+end
+
+function Aureus:_showScriptBloxModal(script)
+    Aureus:Notify("ScriptBlox", "Loading script details...", 2, "info")
+    Aureus:fetchScriptBloxDetail(script.slug, function(detail)
+        if not detail then
+            Aureus:Notify("ScriptBlox", "Failed to load script details.", 3, "error")
+            return
+        end
+        for _, c in ipairs(ModalBody:GetChildren()) do
+            if c:IsA("TextLabel") or c:IsA("Frame") then c:Destroy() end
+        end
+        ModalTitle.Text = detail.title or script.title or "Untitled"
+        local y = 0
+        local lineH = 18
+        local function addRow(label, value, valueColor)
+            Create("TextLabel", {
+                Size = UDim2.new(0, 90, 0, lineH), Position = UDim2.new(0, 0, 0, y),
+                BackgroundTransparency = 1, Text = label,
+                TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+                TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 42, Parent = ModalBody,
+            })
+            Create("TextLabel", {
+                Size = UDim2.new(1, -100, 0, lineH), Position = UDim2.new(0, 95, 0, y),
+                BackgroundTransparency = 1, Text = value or "-",
+                TextColor3 = valueColor or C.Text, Font = Aureus.Config.FontRegular,
+                TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 42, Parent = ModalBody,
+            })
+            y = y + lineH + 2
+        end
+        local owner = detail.owner or {}
+        addRow("Author", owner.username or "Unknown",
+            owner.verified and C.Success or C.Text)
+        if owner.verified then
+            addRow("", "✓ Verified uploader", C.Success)
+        end
+        addRow("Views", formatViews(detail.views or 0), C.Text)
+        addRow("Likes", tostring(detail.likeCount or 0), C.Success)
+        addRow("Dislikes", tostring(detail.dislikeCount or 0), C.Error)
+        addRow("Created", (detail.createdAt or ""):sub(1, 10), C.Text)
+        addRow("Game", (detail.game and detail.game.name) or "Unknown", C.Text)
+        if detail.tags and #detail.tags > 0 then
+            addRow("Tags", table.concat(detail.tags, ", "), C.Info)
+        end
+        if detail.key then addRow("Key System", "🔑 Required", C.Warning) end
+        if detail.isPatched then addRow("Status", "⛔ Patched", C.Error) end
+        if detail.isUniversal then addRow("Scope", "🌐 Universal", C.Info) end
+
+        y = y + 6
+        local level, score, flags = Aureus:analyzeDanger(detail.script, detail)
+        local levelColor, levelIcon = dangerStyle(level)
+        Create("TextLabel", {
+            Size = UDim2.new(1, 0, 0, lineH), Position = UDim2.new(0, 0, 0, y),
+            BackgroundTransparency = 1, Text = "DANGER LEVEL",
+            TextColor3 = C.SubText, Font = Aureus.Config.Font,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 42, Parent = ModalBody,
+        })
+        y = y + lineH + 2
+        Create("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0, y),
+            BackgroundTransparency = 1,
+            Text = ("%s  %s  (score: %d)"):format(levelIcon, level, score),
+            TextColor3 = levelColor, Font = Aureus.Config.Font,
+            TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 42, Parent = ModalBody,
+        })
+        y = y + 26
+        for _, flag in ipairs(flags) do
+            Create("TextLabel", {
+                Size = UDim2.new(1, -10, 0, 16), Position = UDim2.new(0, 10, 0, y),
+                BackgroundTransparency = 1, Text = "• " .. flag,
+                TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+                TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+                TextWrapped = true, ZIndex = 42, Parent = ModalBody,
+            })
+            y = y + 18
+        end
+        y = y + 10
+        Create("TextLabel", {
+            Size = UDim2.new(1, 0, 0, lineH), Position = UDim2.new(0, 0, 0, y),
+            BackgroundTransparency = 1, Text = "SOURCE PREVIEW",
+            TextColor3 = C.SubText, Font = Aureus.Config.Font,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 42, Parent = ModalBody,
+        })
+        y = y + lineH + 4
+        local src = detail.script or ""
+        local maxLines = 40
+        local lineCount = 0
+        local totalLines = select(2, string.gsub(src, "\n", "")) + 1
+        for line in string.gmatch(src .. "\n", "([^\n]*)\n") do
+            if lineCount >= maxLines then
+                Create("TextLabel", {
+                    Size = UDim2.new(1, -4, 0, 16), Position = UDim2.new(0, 0, 0, y),
+                    BackgroundTransparency = 1,
+                    Text = ("... and %d more lines"):format(totalLines - maxLines),
+                    TextColor3 = C.SubText, Font = Aureus.Config.FontCode,
+                    TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+                    ZIndex = 42, Parent = ModalBody,
+                })
+                y = y + 18
+                break
+            end
+            Create("TextLabel", {
+                Size = UDim2.new(1, -4, 0, 16), Position = UDim2.new(0, 0, 0, y),
+                BackgroundTransparency = 1, Text = line,
+                TextColor3 = Color3.fromRGB(200, 90, 90),
+                Font = Aureus.Config.FontCode, TextSize = 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextWrapped = false, ZIndex = 42, Parent = ModalBody,
+            })
+            y = y + 16
+            lineCount = lineCount + 1
+        end
+        ModalBody.CanvasSize = UDim2.new(0, 0, 0, y + 10)
+        ModalGui.Visible = true
+    end)
+end
+
+local filterMap = {
+    ["All"]      = { mode = "",     verified = "",  key = "", universal = "", sortBy = "views", order = "desc" },
+    ["Free"]     = { mode = "free", verified = "",  key = "", universal = "", sortBy = "views", order = "desc" },
+    ["Verified"] = { mode = "",     verified = "1", key = "", universal = "", sortBy = "views", order = "desc" },
+    ["Popular"]  = { mode = "",     verified = "",  key = "", universal = "", sortBy = "views", order = "desc" },
+}
+for name, b in pairs(CatPills) do
+    b.MouseButton1Click:Connect(function()
+        local map = filterMap[name]
+        if not map then return end
+        Aureus.ScriptBlox.Filters.mode      = map.mode or ""
+        Aureus.ScriptBlox.Filters.verified  = map.verified or ""
+        Aureus.ScriptBlox.Filters.key       = map.key or ""
+        Aureus.ScriptBlox.Filters.universal = map.universal or ""
+        Aureus.ScriptBlox.Filters.sortBy    = map.sortBy or "views"
+        Aureus.ScriptBlox.Filters.order     = map.order or "desc"
+        Aureus.ScriptBlox.Filters.search    = SearchBox.Text
+        RefreshCatPills(name)
+        Aureus:fetchScriptBlox(SearchBox.Text, 1)
+    end)
+end
+
+local searchDebounce = nil
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    Aureus.ScriptBlox.Filters.search = SearchBox.Text
+    if searchDebounce then task.cancel(searchDebounce) end
+    searchDebounce = task.delay(0.6, function()
+        Aureus:fetchScriptBlox(SearchBox.Text, 1)
+    end)
+end)
+
+local scopeHubActive = true
+HubPill.MouseButton1Click:Connect(function()
+    scopeHubActive = true
+    TweenService:Create(HubPill, TweenInfo.new(0.15), { BackgroundColor3 = C.Accent }):Play()
+    TweenService:Create(MinePill, TweenInfo.new(0.15), { BackgroundColor3 = C.Card }):Play()
+    Aureus:fetchScriptBlox(SearchBox.Text, 1)
+end)
+MinePill.MouseButton1Click:Connect(function()
+    scopeHubActive = false
+    TweenService:Create(MinePill, TweenInfo.new(0.15), { BackgroundColor3 = C.Accent }):Play()
+    TweenService:Create(HubPill, TweenInfo.new(0.15), { BackgroundColor3 = C.Card }):Play()
+    RenderLocalScripts()
+end)
+
+RenderLocalScripts()
+
+-- ==================== MODAL (shared) ====================
+local ModalGui = Create("Frame", {
+    Name = "ScriptModal", Size = UDim2.new(1, 0, 1, 0),
+    BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.5,
+    Visible = false, ZIndex = 40, Parent = ScreenGui,
+})
+local ModalCard = Create("Frame", {
+    Size = UDim2.new(0, 380, 0, 200),
+    Position = UDim2.new(0.5, 0, 0.5, 0),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0,
+    ZIndex = 41, Parent = ModalGui,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = ModalCard })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ModalCard })
+
+local ModalHeader = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1,
+    ZIndex = 42, Parent = ModalCard,
+})
+Create("TextLabel", {
+    Size = UDim2.new(0, 24, 0, 24), Position = UDim2.new(0, 14, 0.5, -12),
+    BackgroundTransparency = 1, Text = "</>",
+    TextColor3 = C.Accent, Font = Aureus.Config.Font, TextSize = 15,
+    TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 42, Parent = ModalHeader,
+})
+local ModalTitle = Create("TextLabel", {
+    Size = UDim2.new(1, -100, 1, 0), Position = UDim2.new(0, 44, 0, 0),
+    BackgroundTransparency = 1, Text = "",
+    TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 42, Parent = ModalHeader,
+})
+local ModalClose = Create("TextButton", {
+    Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(1, -38, 0.5, -14),
+    BackgroundTransparency = 1, Text = "✕",
+    TextColor3 = C.SubText, Font = Aureus.Config.Font,
+    TextSize = 15, ZIndex = 42, Parent = ModalHeader,
+})
+Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 0, 44),
+    BackgroundColor3 = C.Border, BorderSizePixel = 0,
+    ZIndex = 42, Parent = ModalCard,
+})
+local ModalBody = Create("ScrollingFrame", {
+    Size = UDim2.new(1, -28, 1, -60), Position = UDim2.new(0, 14, 0, 52),
+    BackgroundTransparency = 1, CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4, ScrollBarImageColor3 = C.Accent,
+    ZIndex = 42, Parent = ModalCard,
+})
+Create("UIListLayout", { Padding = UDim.new(0, 6), Parent = ModalBody })
+
+ModalClose.MouseButton1Click:Connect(function() ModalGui.Visible = false end)
+
+-- ==================== HISTORY ====================
+local HistoryTab = CreateTab("History", false)
+Create("TextLabel", {
+    Size = UDim2.new(1, -120, 0, 26), BackgroundTransparency = 1,
+    Text = "Execution History", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = HistoryTab,
+})
+local ClearHistBtn = Create("TextButton", {
+    Size = UDim2.new(0, 100, 0, 24), Position = UDim2.new(1, -100, 0, 0),
+    BackgroundColor3 = C.Card, Text = "CLEAR",
+    TextColor3 = C.Text, Font = Aureus.Config.Font,
+    TextSize = 10, Parent = HistoryTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = ClearHistBtn })
+ClearHistBtn.MouseButton1Click:Connect(function()
+    Aureus.History = {}
+    Aureus:refreshHistoryUI()
+end)
+
+local HistList = Create("ScrollingFrame", {
+    Size = UDim2.new(1, -20, 1, -40), Position = UDim2.new(0, 0, 0, 36),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0,
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4, ScrollBarImageColor3 = C.Accent,
+    ScrollBarImageTransparency = 0.4, Parent = HistoryTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = HistList })
+Create("UIListLayout", { Padding = UDim.new(0, 4), Parent = HistList })
+
+function Aureus:refreshHistoryUI()
+    if not HistList or not HistList.Parent then return end
+    for _, c in ipairs(HistList:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    local y = 4
+    for _, h in ipairs(self.History) do
+        local row = Create("Frame", {
+            Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 0, y),
+            BackgroundColor3 = C.Background, BorderSizePixel = 0, Parent = HistList,
+        })
+        Create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = row })
+        Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = row })
+        local statusColor = (h.status == "ok") and C.Success
+            or (h.status == "timeout") and C.Warning
+            or C.Error
+        Create("TextLabel", {
+            Size = UDim2.new(0, 60, 1, 0), BackgroundTransparency = 1,
+            Text = h.at, TextColor3 = C.SubText,
+            Font = Aureus.Config.FontCode, TextSize = 10,
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(0, 70, 1, 0), Position = UDim2.new(0, 60, 0, 0),
+            BackgroundTransparency = 1, Text = h.kind,
+            TextColor3 = C.Info, Font = Aureus.Config.Font,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(0, 90, 1, 0), Position = UDim2.new(0, 130, 0, 0),
+            BackgroundTransparency = 1, Text = h.status,
+            TextColor3 = statusColor, Font = Aureus.Config.Font,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        Create("TextLabel", {
+            Size = UDim2.new(1, -240, 1, 0), Position = UDim2.new(0, 220, 0, 0),
+            BackgroundTransparency = 1,
+            Text = h.remote .. " · " .. h.format,
+            TextColor3 = C.Text, Font = Aureus.Config.FontCode,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+        })
+        y = y + 44
+    end
+    HistList.CanvasSize = UDim2.new(0, 0, 0, y + 4)
+end
+
+-- ==================== REFERRALS ====================
+local ReferralsTab = CreateTab("Referrals", true)
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
+    Text = "Referral Program", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = ReferralsTab,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 30),
+    BackgroundTransparency = 1, Text = "Share Aureus with friends (visual placeholder)",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = ReferralsTab,
+})
+local ShareFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 130), Position = UDim2.new(0, 0, 0, 70),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = ReferralsTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = ShareFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ShareFrame })
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 15, 0, 10),
+    BackgroundTransparency = 1, Text = "Share Your Code",
+    TextColor3 = C.Text, Font = Aureus.Config.Font,
+    TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = ShareFrame,
+})
+local RefInput = Create("TextBox", {
+    Size = UDim2.new(1, -50, 0, 25), Position = UDim2.new(0, 15, 0, 55),
+    BackgroundColor3 = C.Background,
+    Text = "REF" .. uuid12():upper():sub(1, 8),
+    TextColor3 = C.Text, Font = Aureus.Config.FontCode,
+    TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = ShareFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = RefInput })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = RefInput })
+
+-- ==================== SETTINGS ====================
+local SettingsTab = CreateTab("Settings", true)
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1,
+    Text = "Preferences", TextColor3 = C.Text,
+    Font = Aureus.Config.Font, TextSize = 22,
+    TextXAlignment = Enum.TextXAlignment.Left, Parent = SettingsTab,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 30),
+    BackgroundTransparency = 1, Text = "Customize your Aureus experience",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = SettingsTab,
+})
+
+local ScanSettingsFrame = Create("Frame", {
+    Size = UDim2.new(1, -20, 0, 260), Position = UDim2.new(0, 0, 0, 70),
+    BackgroundColor3 = C.Card, BorderSizePixel = 0, Parent = SettingsTab,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = ScanSettingsFrame })
+Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = ScanSettingsFrame })
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 15, 0, 10),
+    BackgroundTransparency = 1, Text = "Scan & Execute",
+    TextColor3 = C.Text, Font = Aureus.Config.Font,
+    TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, Parent = ScanSettingsFrame,
+})
+Create("TextLabel", {
+    Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 15, 0, 30),
+    BackgroundTransparency = 1, Text = "These affect the real scanner and executor",
+    TextColor3 = C.SubText, Font = Aureus.Config.FontRegular,
+    TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Parent = ScanSettingsFrame,
+})
+
+local function MakeToggle(parent, y, label, key)
+    local row = Create("Frame", {
+        Size = UDim2.new(1, -30, 0, 34), Position = UDim2.new(0, 15, 0, y),
+        BackgroundColor3 = C.Background, BorderSizePixel = 0, Parent = parent,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = row })
+    Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = row })
+    Create("TextLabel", {
+        Size = UDim2.new(1, -80, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+        BackgroundTransparency = 1, Text = label,
+        TextColor3 = C.Text, Font = Aureus.Config.FontRegular,
+        TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+    })
+    local track = Create("Frame", {
+        Size = UDim2.new(0, 40, 0, 20), Position = UDim2.new(1, -52, 0.5, -10),
+        BackgroundColor3 = Aureus.Settings[key] and C.Accent or C.ToggleOff,
+        BorderSizePixel = 0, Parent = row,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = track })
+    local knob = Create("Frame", {
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = Aureus.Settings[key] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
+        BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = track,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = knob })
+    local click = Create("TextButton", {
+        Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", Parent = row,
+    })
+    click.MouseButton1Click:Connect(function()
+        Aureus.Settings[key] = not Aureus.Settings[key]
+        local on = Aureus.Settings[key]
+        TweenService:Create(track, TweenInfo.new(0.2), {
+            BackgroundColor3 = on and C.Accent or C.ToggleOff,
+        }):Play()
+        TweenService:Create(knob, TweenInfo.new(0.2), {
+            Position = on and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
+        }):Play()
+    end)
+end
+
+local function MakeSlider(parent, y, label, key, min, max, step)
+    local row = Create("Frame", {
+        Size = UDim2.new(1, -30, 0, 44), Position = UDim2.new(0, 15, 0, y),
+        BackgroundColor3 = C.Background, BorderSizePixel = 0, Parent = parent,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = row })
+    Create("UIStroke", { Color = C.Border, Thickness = 1, Parent = row })
+    local val = Create("TextLabel", {
+        Size = UDim2.new(1, -24, 0, 16), Position = UDim2.new(0, 12, 0, 4),
+        BackgroundTransparency = 1,
+        Text = ("%s: %s"):format(label, tostring(Aureus.Settings[key])),
+        TextColor3 = C.Text, Font = Aureus.Config.FontRegular,
+        TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+    })
+    local bar = Create("Frame", {
+        Size = UDim2.new(1, -24, 0, 6), Position = UDim2.new(0, 12, 0, 28),
+        BackgroundColor3 = C.Background, BorderSizePixel = 0, Parent = row,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 3), Parent = bar })
+    local fill = Create("Frame", {
+        Size = UDim2.new((Aureus.Settings[key] - min) / (max - min), 0, 1, 0),
+        BackgroundColor3 = C.Accent, BorderSizePixel = 0, Parent = bar,
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 3), Parent = fill })
+    local hit = Create("TextButton", {
+        Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", Parent = bar,
+    })
+    hit.MouseButton1Down:Connect(function()
+        local moving = true
+        local conn
+        conn = UserInputService.InputChanged:Connect(function(i)
+            if not moving then return end
+            if i.UserInputType ~= Enum.UserInputType.MouseMovement
+               and i.UserInputType ~= Enum.UserInputType.Touch then return end
+            local rel = (i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+            rel = math.clamp(rel, 0, 1)
+            local v = math.floor((min + rel * (max - min)) / step + 0.5) * step
+            Aureus.Settings[key] = v
+            fill.Size = UDim2.new((v - min) / (max - min), 0, 1, 0)
+            val.Text = ("%s: %s"):format(label, tostring(v))
+        end)
+        local up
+        up = UserInputService.InputEnded:Connect(function()
+            moving = false; conn:Disconnect(); up:Disconnect()
+        end)
+    end)
+end
+
+MakeSlider(ScanSettingsFrame, 55,  "Probe timeout (s)",       "ProbeTimeout",   0.5, 6,  0.5)
+MakeSlider(ScanSettingsFrame, 105, "Rate limit (ms / probe)", "RateLimitMs",    0,   50, 1)
+MakeSlider(ScanSettingsFrame, 155, "Result timeout (s)",      "ResultTimeout",  2,   20, 1)
+MakeToggle(ScanSettingsFrame, 205, "Skip known-safe remotes", "SkipKnownSafeRemotes")
+MakeToggle(ScanSettingsFrame, 245, "Auto-select first hit",   "AutoSelectFirstHit")
+
+-- ==================== COMMAND PALETTE ====================
+local PaletteFrame = Create("Frame", {
+    Name = "CommandPalette", Size = UDim2.new(0, 400, 0, 300),
+    Position = UDim2.new(0.5, -200, 0.3, 0),
+    BackgroundColor3 = C.Background, BorderSizePixel = 0,
+    Visible = false, ZIndex = 20, Parent = ScreenGui,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = PaletteFrame })
+Create("UIStroke", { Color = C.Accent, Thickness = 1, Parent = PaletteFrame })
+local PaletteInput = Create("TextBox", {
+    Size = UDim2.new(1, -20, 0, 40), Position = UDim2.new(0, 10, 0, 10),
+    BackgroundColor3 = C.Card, PlaceholderText = "Search tabs...",
+    Text = "", TextColor3 = C.Text, Font = Aureus.Config.FontRegular,
+    TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Parent = PaletteFrame,
+})
+Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = PaletteInput })
+local PaletteList = Create("ScrollingFrame", {
+    Size = UDim2.new(1, -20, 1, -70), Position = UDim2.new(0, 10, 0, 60),
+    BackgroundTransparency = 1, CanvasSize = UDim2.new(0, 0, 0, 0),
+    ScrollBarThickness = 4, Parent = PaletteFrame,
+})
+Create("UIListLayout", { Padding = UDim.new(0, 5), Parent = PaletteList })
+
+local function UpdatePalette(search)
+    for _, v in pairs(PaletteList:GetChildren()) do
+        if v:IsA("TextButton") then v:Destroy() end
+    end
+    local s = string.lower(search)
+    local yOffset = 0
+    for tabName, _ in pairs(Tabs) do
+        if string.find(string.lower(tabName), s) then
+            local Btn = Create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 30),
+                BackgroundColor3 = C.Card, Text = tabName,
+                TextColor3 = C.Text, Font = Aureus.Config.Font, TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = PaletteList,
+            })
+            Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Btn })
+            Btn.MouseButton1Click:Connect(function()
+                SwitchTab(tabName)
+                PaletteFrame.Visible = false
+                PaletteInput.Text = ""
+            end)
+            yOffset = yOffset + 35
+        end
+    end
+    PaletteList.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+end
+PaletteInput:GetPropertyChangedSignal("Text"):Connect(function()
+    UpdatePalette(PaletteInput.Text)
+end)
+UpdatePalette("")
+
+-- ========================================================
+-- EVENTS
+-- ========================================================
+LoginBtn.MouseButton1Click:Connect(function()
+    local key = KeyInput.Text
+    if key and key ~= "" then
+        LoginStatus.Text = "Opening..."
+        LoginStatus.TextColor3 = C.SubText
+        task.spawn(function()
+            task.wait(0.4)
+            LoginStatus.Text = "Ready"
+            LoginStatus.TextColor3 = C.Accent
+            task.wait(0.2)
+            TweenService:Create(LoginFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Size = UDim2.new(0, 350, 0, 240), BackgroundTransparency = 1,
+            }):Play()
+            task.wait(0.3)
+            LoginFrame.Visible = false
+            MainFrame.Visible = true
+            MainFrame.Size = UDim2.new(0, 750, 0, 470)
+            TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 800, 0, 500),
+            }):Play()
+            Aureus:Notify("Welcome",
+                "Set your username in Dashboard first. Auto-scan runs in the background.",
+                6, "success")
+        end)
+    else
+        LoginStatus.Text = "Please enter a value."
+        LoginStatus.TextColor3 = C.Warning
+    end
+end)
+
+local function CloseUI()
+    local t = TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, 700, 0, 400), BackgroundTransparency = 1,
+    })
+    t:Play()
+    t.Completed:Connect(function()
+        MainFrame.Visible = false
+        MainFrame.Size = UDim2.new(0, 800, 0, 500)
+        MainFrame.BackgroundTransparency = 0
+    end)
+end
+local function OpenUI()
+    MainFrame.Visible = true
+    MainFrame.Size = UDim2.new(0, 700, 0, 400)
+    MainFrame.BackgroundTransparency = 1
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 800, 0, 500), BackgroundTransparency = 0,
+    }):Play()
+end
+
+CloseBtn.MouseButton1Click:Connect(CloseUI)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        if MainFrame.Visible then CloseUI() else OpenUI() end
+    end
+    if input.KeyCode == Enum.KeyCode.K and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        PaletteFrame.Visible = not PaletteFrame.Visible
+        if PaletteFrame.Visible then
+            PaletteInput:CaptureFocus()
+            UpdatePalette("")
+        end
+    end
+end)
+
+SwitchTab("Dashboard")
+
+-- Drag
+local dragging, dragInput, dragStart, startPos
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(
+        startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+TopBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+       or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+TopBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+       or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then updateDrag(input) end
+end)
+
+-- ========================================================
+-- BOOT
+-- ========================================================
+ensureBeaconListener()
+Aureus:refreshHitUI()
+Aureus:refreshHistoryUI()
+
+getgenv().Aureus = Aureus
+
+Aureus:Notify("Aureus v" .. Aureus.Version,
+    "Set username in Dashboard. Auto-scan runs 4s after load. ScriptBlox loads 3s after.",
+    7, "success")
+
+task.spawn(function()
+    task.wait(4)
+    if not Aureus.Running then
+        Aureus:Notify("Auto-Scan", "Scanning this game for backdoors...", 4, "info")
+        Aureus:scan()
+    end
+end)
+
+task.delay(3, function()
+    Aureus:fetchScriptBlox("", 1)
+end)
+
+return Aureus
